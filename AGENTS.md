@@ -154,3 +154,79 @@ Mỗi lần train **phải** gọi:
 - `mlflow.log_metric()` — precision, recall, f1, pr_auc, roc_auc
 - `mlflow.sklearn.log_model()` hoặc `mlflow.xgboost.log_model()` — lưu model artifact
 - Tag run với tên model, mục đích (baseline/experiment/production)
+
+---
+
+## 7. Session Management Plan (Token Optimization)
+
+Project này được chia thành **6 sessions** để tối ưu token và giữ context gọn. Mỗi session là 1 milestone độc lập, có thể bắt đầu chat mới mà không mất context nhờ `AGENTS.md` + `docs/architecture.md` + git history.
+
+### Bảng phân chia sessions
+
+| Session | Trạng thái | Scope | Deliverables |
+|---------|-----------|-------|--------------|
+| 1 | ✅ DONE | Setup + AGENTS.md + Architecture Design | `.gitignore`, `pyproject.toml`, `AGENTS.md`, `docs/architecture.md` |
+| 2 | ⬜ TODO | Data + EDA + Baseline Model + MLflow | `src/config.py`, `src/features.py`, `src/train.py`, `src/evaluate.py`, notebook EDA, baseline LR tracked in MLflow |
+| 3 | ⬜ TODO | FastAPI Serving + Deploy khung | `src/api.py`, `Dockerfile`, deploy lên Hugging Face Spaces (link sống) |
+| 4 | ⬜ TODO | XGBoost/LightGBM + Tuning + MLflow Registry | Model chính, nhiều runs MLflow, chọn best model, đăng ký vào Registry |
+| 5 | ⬜ TODO | Validation Gate + Testing + CI/CD | `src/validate.py`, `tests/`, `.github/workflows/`, pytest + ruff + pipeline smoke test |
+| 6 | ⬜ TODO | Final Deploy + README + Model Card | `README.md`, `docs/model_card.md`, deploy bản cuối, polish |
+
+### Bootstrap Prompt cho mỗi session mới
+
+Khi bắt đầu session mới, user sẽ paste prompt tương ứng:
+
+**Session 2:**
+```
+Tôi tiếp tục project MLOps Fraud Detection. Đọc AGENTS.md và docs/architecture.md để nắm context.
+Session 2: Setup môi trường uv, tải dataset Kaggle Credit Card Fraud, EDA nhanh, build baseline Logistic Regression + log MLflow.
+Kiểm tra codebase hiện tại rồi bắt đầu.
+```
+
+**Session 3:**
+```
+Tôi tiếp tục project MLOps Fraud Detection. Đọc AGENTS.md và docs/architecture.md.
+Session 3: Wrap model baseline vào FastAPI (src/api.py), tạo Dockerfile, deploy lên Hugging Face Spaces.
+Kiểm tra codebase hiện tại rồi bắt đầu.
+```
+
+**Session 4:**
+```
+Tôi tiếp tục project MLOps Fraud Detection. Đọc AGENTS.md và docs/architecture.md.
+Session 4: Build XGBoost/LightGBM model, xử lý imbalance, chạy nhiều runs MLflow, chọn best model → MLflow Registry.
+Kiểm tra codebase hiện tại rồi bắt đầu.
+```
+
+**Session 5:**
+```
+Tôi tiếp tục project MLOps Fraud Detection. Đọc AGENTS.md và docs/architecture.md.
+Session 5: Viết validation gate (so sánh model mới vs production), pytest cho features + API, CI/CD GitHub Actions.
+Kiểm tra codebase hiện tại rồi bắt đầu.
+```
+
+**Session 6:**
+```
+Tôi tiếp tục project MLOps Fraud Detection. Đọc AGENTS.md và docs/architecture.md.
+Session 6: Deploy bản cuối, viết README.md (bảng so sánh models, sơ đồ pipeline), viết model card, polish.
+Kiểm tra codebase hiện tại rồi bắt đầu.
+```
+
+### ⚡ Quy tắc kết thúc session (BẮT BUỘC cho AI)
+
+Khi hoàn thành **tất cả deliverables** của session hiện tại, AI **PHẢI**:
+
+1. **Commit** tất cả thay đổi (Conventional Commits)
+2. **Cập nhật bảng sessions** ở trên: đổi trạng thái session vừa xong từ `⬜ TODO` sang `✅ DONE`
+3. **Thông báo cho user** bằng message có format sau:
+
+```
+✅ Session [N] hoàn thành!
+
+Deliverables đã xong:
+- [liệt kê]
+
+👉 Bạn nên tạo NEW SESSION và paste prompt sau:
+[copy bootstrap prompt của session tiếp theo]
+```
+
+> ⚠️ AI không được tự tiếp tục sang session tiếp theo mà không thông báo. User quyết định khi nào bắt đầu session mới.
