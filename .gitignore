@@ -28,6 +28,7 @@ ENV/
 # ML Artifacts — KHÔNG commit model và data vào git
 mlruns/
 mlartifacts/
+mlflow.db
 *.pkl
 *.joblib
 *.h5
