@@ -34,6 +34,8 @@ mlflow.db
 *.h5
 *.onnx
 models/*.pkl
+models/
+!models/.gitkeep
 models/*.joblib
 
 # Data — dùng .gitignore, data tải về local

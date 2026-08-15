@@ -1,0 +1,47 @@
+# .dockerignore — exclude heavy/sensitive files from Docker build context
+
+# Python cache
+__pycache__/
+*.py[cod]
+.Python
+*.egg-info/
+.eggs/
+
+# Virtual environment (Docker installs its own via uv)
+.venv/
+venv/
+
+# ML artifacts — NOT included in image (model is in models/ which IS included)
+mlruns/
+mlartifacts/
+mlflow.db
+*.pkl.bak
+
+# Data — never copy training data into image
+data/
+
+# Notebooks — not needed at runtime
+notebooks/
+
+# Tests — not needed at runtime
+tests/
+
+# Dev tools
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+*.log
+
+# Git / IDE
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# Docs
+docs/
+*.md
+
+# Scripts (only needed for dev, not runtime)
+scripts/

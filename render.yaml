@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: fraud-detection-api
+    runtime: docker
+    # Render builds from Dockerfile in repo root.
+    # IMPORTANT: models/baseline_lr.pkl must be committed or provided via alternative.
+    # See README for deployment steps.
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: MODEL_PATH
+        value: models/baseline_lr.pkl
+      # Uncomment below to use HF Hub model download instead of bundled pkl:
+      # - key: HF_REPO_ID
+      #   value: your-username/fraud-detection-model
+      # - key: HF_TOKEN
+      #   fromSecret: HF_TOKEN
