@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 
 REGISTERED_MODEL_NAME = "fraud-detection-model"
 MODEL_ALIAS = "production"
-HF_MODEL_FILENAME = "fraud_model.pkl"
+HF_MODEL_FILENAME = "baseline_lr.pkl"  # filename on HF Hub (set by export_model.py)
 
 # Approximate Amount scaler stats from the full Kaggle creditcard dataset
 # (computed during EDA — used to scale incoming raw Amount values)
