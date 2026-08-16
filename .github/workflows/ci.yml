@@ -1,0 +1,170 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs for the same branch to avoid wasting resources
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  UV_VERSION: "0.5.x"
+
+jobs:
+  ci:
+    name: Lint · Test · Smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      # ------------------------------------------------------------------ #
+      # 1. Checkout
+      # ------------------------------------------------------------------ #
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ------------------------------------------------------------------ #
+      # 2. Set up Python
+      # ------------------------------------------------------------------ #
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # ------------------------------------------------------------------ #
+      # 3. Install uv
+      # ------------------------------------------------------------------ #
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      # ------------------------------------------------------------------ #
+      # 4. Cache uv virtualenv
+      # ------------------------------------------------------------------ #
+      - name: Cache uv virtualenv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            venv-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-
+
+      # ------------------------------------------------------------------ #
+      # 5. Install dependencies (dev extras for pytest + ruff)
+      # ------------------------------------------------------------------ #
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      # ------------------------------------------------------------------ #
+      # 6. Lint: ruff check
+      # ------------------------------------------------------------------ #
+      - name: Ruff lint check
+        run: uv run ruff check src/ tests/ scripts/
+
+      # ------------------------------------------------------------------ #
+      # 7. Lint: ruff format check
+      # ------------------------------------------------------------------ #
+      - name: Ruff format check
+        run: uv run ruff format --check src/ tests/ scripts/
+
+      # ------------------------------------------------------------------ #
+      # 8. Unit + integration tests
+      #    - Excludes smoke test (needs real dataset)
+      #    - MODEL_PATH points to the bundled baseline model
+      # ------------------------------------------------------------------ #
+      - name: Run pytest
+        env:
+          MODEL_PATH: models/baseline_lr.pkl
+          # Use an isolated in-memory MLflow DB so tests don't touch production
+          MLFLOW_TRACKING_URI: sqlite:///ci_mlflow.db
+        run: |
+          uv run pytest tests/ -v --tb=short \
+            --ignore=tests/test_smoke.py \
+            -x
+
+      # ------------------------------------------------------------------ #
+      # 9. Pipeline smoke test (synthetic tiny dataset — no Kaggle needed)
+      # ------------------------------------------------------------------ #
+      - name: Generate synthetic smoke dataset
+        run: |
+          uv run python - <<'EOF'
+          import numpy as np
+          import pandas as pd
+          from pathlib import Path
+
+          rng = np.random.default_rng(42)
+          n = 1000
+          data = {"Time": rng.uniform(0, 172792, n)}
+          for i in range(1, 29):
+              data[f"V{i}"] = rng.standard_normal(n)
+          data["Amount"] = rng.uniform(0.01, 500, n)
+          # ~2% fraud
+          labels = np.zeros(n, dtype=int)
+          fraud_idx = rng.choice(n, size=20, replace=False)
+          labels[fraud_idx] = 1
+          data["Class"] = labels
+
+          Path("data/raw").mkdir(parents=True, exist_ok=True)
+          pd.DataFrame(data).to_csv("data/raw/creditcard.csv", index=False)
+          print(f"Smoke dataset written: {n} rows, 20 fraud")
+          EOF
+
+      - name: Run training pipeline smoke test
+        env:
+          MLFLOW_TRACKING_URI: sqlite:///ci_mlflow.db
+          SMOKE_TEST: "1"
+        run: |
+          uv run python -c "
+          import logging, os
+          logging.basicConfig(level=logging.WARNING)
+
+          # Verify data loading + preprocessing pipeline works end-to-end
+          from src.features import load_data, preprocess, split_data
+          from src.evaluate import evaluate_model
+          from src.config import RAW_DATA_PATH
+          from sklearn.linear_model import LogisticRegression
+
+          df = load_data(RAW_DATA_PATH)
+          X, y = preprocess(df)
+          X_train, X_test, y_train, y_test = split_data(X, y)
+
+          model = LogisticRegression(class_weight='balanced', max_iter=200, random_state=42)
+          model.fit(X_train, y_train)
+          metrics = evaluate_model(model, X_test, y_test)
+
+          print('Smoke test passed!')
+          print(f'  PR-AUC  : {metrics[\"pr_auc\"]:.4f}')
+          print(f'  Recall  : {metrics[\"recall\"]:.4f}')
+          print(f'  Precision: {metrics[\"precision\"]:.4f}')
+
+          # Validate gate smoke test
+          from src.validate import run_validation_gate, ValidationStatus
+          from unittest.mock import MagicMock, patch
+          from mlflow.exceptions import MlflowException
+
+          mock_client = MagicMock()
+          mock_client.get_model_version_by_alias.side_effect = MlflowException('Not found')
+          with patch('src.validate.mlflow.register_model') as mock_reg:
+              mock_ver = MagicMock(); mock_ver.version = '1'
+              mock_reg.return_value = mock_ver
+              result = run_validation_gate('fake-run', metrics, client=mock_client)
+          assert result.status in (ValidationStatus.FIRST_DEPLOYMENT, ValidationStatus.PROMOTED, ValidationStatus.REJECTED)
+          print(f'  Validation gate: {result.status.value}')
+          print('All smoke tests passed! ✅')
+          "
+
+      # ------------------------------------------------------------------ #
+      # 10. Upload test artifacts on failure (optional)
+      # ------------------------------------------------------------------ #
+      - name: Upload CI MLflow DB on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-mlflow-db
+          path: ci_mlflow.db
+          retention-days: 3
