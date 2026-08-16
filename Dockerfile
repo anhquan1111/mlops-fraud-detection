@@ -2,7 +2,7 @@
 # ─────────────────────────────────────────────────────────────
 # Fraud Detection FastAPI — Production Dockerfile
 # Port: 10000 (Render default for web services)
-# Model: bundled at build time from models/baseline_lr.pkl
+# Model: loaded at runtime via HF_REPO_ID env var (Hugging Face Hub)
 # ─────────────────────────────────────────────────────────────
 
 FROM python:3.12-slim
@@ -19,13 +19,12 @@ RUN uv sync --frozen --no-dev --no-install-project
 # Copy source code
 COPY src/ ./src/
 
-# Copy pre-exported model artifact (gitignored, must exist locally before docker build)
-# Run `uv run python scripts/export_model.py` first to generate this file.
-COPY models/baseline_lr.pkl ./models/baseline_lr.pkl
-
+# Model loading strategy (set via env vars at runtime, NOT baked in):
+#   LOCAL:  MODEL_PATH=models/my_model.pkl  (bind-mount or copy manually)
+#   RENDER: HF_REPO_ID=username/repo-name   (downloads from Hugging Face Hub on startup)
+# Do NOT COPY model files here — .pkl files are gitignored
 # Environment variables
-ENV MODEL_PATH=models/baseline_lr.pkl \
-    PYTHONUNBUFFERED=1 \
+ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     UV_SYSTEM_PYTHON=1
 

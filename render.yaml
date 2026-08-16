@@ -2,17 +2,15 @@ services:
   - type: web
     name: fraud-detection-api
     runtime: docker
-    # Render builds from Dockerfile in repo root.
-    # IMPORTANT: models/baseline_lr.pkl must be committed or provided via alternative.
-    # See README for deployment steps.
     dockerfilePath: ./Dockerfile
     plan: free
     healthCheckPath: /health
     envVars:
-      - key: MODEL_PATH
-        value: models/baseline_lr.pkl
-      # Uncomment below to use HF Hub model download instead of bundled pkl:
-      # - key: HF_REPO_ID
-      #   value: your-username/fraud-detection-model
+      # Model source: Hugging Face Hub (recommended for Render)
+      # 1. Upload model: HF_TOKEN=hf_xxx HF_REPO_ID=username/repo uv run python scripts/export_model.py --upload
+      # 2. Set these env vars on Render dashboard or uncomment below:
+      - key: HF_REPO_ID
+        value: your-username/fraud-detection-model  # ← CHANGE THIS
+      # HF_TOKEN only needed for private repos — leave unset for public repos
       # - key: HF_TOKEN
       #   fromSecret: HF_TOKEN

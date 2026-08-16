@@ -28,9 +28,9 @@ from src.config import MLFLOW_TRACKING_URI
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
-REGISTERED_MODEL_NAME = "fraud-detection-baseline"
+REGISTERED_MODEL_NAME = "fraud-detection-model"  # matches src/config.py
 MODEL_ALIAS = "production"
-LOCAL_MODEL_PATH = Path("models/baseline_lr.pkl")
+LOCAL_MODEL_PATH = Path("models/fraud_model.pkl")
 
 
 def export_model(upload: bool = False) -> Path:
@@ -128,28 +128,28 @@ def _upload_to_hf_hub(model_path: Path, model_version) -> None:
 language: en
 tags:
   - fraud-detection
+  - lightgbm
   - scikit-learn
-  - logistic-regression
   - imbalanced-classification
 license: mit
 ---
 
-# Credit Card Fraud Detection — Baseline Logistic Regression
+# Credit Card Fraud Detection — LightGBM Champion Model
 
 ## Model Description
 
-Logistic Regression baseline for credit card fraud detection on the
+LightGBM (`lgbm_large`) champion model for credit card fraud detection on the
 [Kaggle Credit Card Fraud Dataset](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud).
+Registered in MLflow Registry as `fraud-detection-model@production`.
 
-## Performance (Test Set)
+## Performance (Test Set — 56,962 samples)
 
 | Metric | Value |
 |--------|-------|
-| PR-AUC | 0.7156 |
-| Recall | 0.9184 |
-| Precision | 0.8571 |
-| F1 | 0.8867 |
-| ROC-AUC | 0.9787 |
+| PR-AUC | 0.8770 |
+| Recall | 0.8571 |
+| Precision | 0.8485 |
+| F1 | 0.8528 |
 
 ## Usage
 
@@ -157,8 +157,8 @@ Logistic Regression baseline for credit card fraud detection on the
 import joblib
 import numpy as np
 
-model = joblib.load("baseline_lr.pkl")
-# features: V1-V28 (PCA), Amount (StandardScaler)
+model = joblib.load("fraud_model.pkl")
+# features: V1-V28 (PCA), Amount (StandardScaler μ=88.35, σ=250.12)
 X = np.array([[...]])  # shape (1, 29)
 proba = model.predict_proba(X)[:, 1]  # fraud probability
 ```
