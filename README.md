@@ -6,8 +6,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![MLflow](https://img.shields.io/badge/tracking-MLflow-0194E2.svg)](https://mlflow.org/)
 [![FastAPI](https://img.shields.io/badge/API-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
+[![Live Demo](https://img.shields.io/badge/Live%20Dashboard-Render-46E3B7?style=flat&logo=render)](https://mlops-fraud-detection-g7c7.onrender.com)
 
 End-to-end MLOps pipeline for **real-time credit card fraud detection** on a severely imbalanced dataset (~0.17% fraud). Built with LightGBM, MLflow experiment tracking, FastAPI serving, Docker, and GitHub Actions CI/CD.
+
+🌐 **Live Interactive Dashboard:** [https://mlops-fraud-detection-g7c7.onrender.com](https://mlops-fraud-detection-g7c7.onrender.com)  
+⚡ **Swagger API Docs:** [https://mlops-fraud-detection-g7c7.onrender.com/docs](https://mlops-fraud-detection-g7c7.onrender.com/docs)
 
 ---
 

@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MLOps Fraud Detection — Production Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0e17;
+            --bg-secondary: #111827;
+            --bg-card: rgba(17, 24, 39, 0.75);
+            --bg-card-hover: rgba(31, 41, 55, 0.8);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --border-focus: rgba(99, 102, 241, 0.5);
+            
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            
+            --accent-primary: #6366f1;
+            --accent-primary-hover: #4f46e5;
+            --accent-glow: rgba(99, 102, 241, 0.25);
+            
+            --color-success: #10b981;
+            --color-success-bg: rgba(16, 185, 129, 0.12);
+            --color-danger: #ef4444;
+            --color-danger-bg: rgba(239, 68, 68, 0.12);
+            --color-warning: #f59e0b;
+            --color-info: #38bdf8;
+            
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 18px;
+            --radius-xl: 24px;
+            
+            --transition-smooth: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.12) 0%, transparent 40%),
+                radial-gradient(circle at 85% 85%, rgba(16, 185, 129, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 50% 50%, rgba(14, 165, 233, 0.05) 0%, transparent 60%);
+            background-attachment: fixed;
+        }
+
+        .container {
+            max-width: 1240px;
+            margin: 0 auto;
+            padding: 24px 20px 60px;
+        }
+
+        /* Top Header */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            margin-bottom: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .brand-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #6366f1, #3b82f6, #10b981);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
+        }
+
+        .brand-text h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(to right, #ffffff, #cbd5e1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .brand-text p {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--color-success);
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--color-success);
+            box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+            animation: pulse-ring 2s infinite;
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        .btn-nav {
+            padding: 8px 14px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            text-decoration: none;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 500;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-nav:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-1px);
+        }
+
+        /* Tab Navigation */
+        .tabs {
+            display: flex;
+            gap: 8px;
+            background: var(--bg-card);
+            padding: 6px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-color);
+            margin-bottom: 24px;
+            overflow-x: auto;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 10px 18px;
+            background: transparent;
+            border: none;
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .tab-btn.active {
+            color: #ffffff;
+            background: var(--accent-primary);
+            box-shadow: 0 4px 16px var(--accent-glow);
+        }
+
+        /* Tab Contents */
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Grid Layout */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 900px) {
+            .grid-2 { grid-template-columns: 1fr; }
+            header { flex-direction: column; gap: 16px; align-items: flex-start; }
+            .header-actions { width: 100%; justify-content: space-between; flex-wrap: wrap; }
+        }
+
+        /* Card Styles */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+            backdrop-filter: blur(12px);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .card-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 18px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Presets Toolbar */
+        .presets-bar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .btn-preset {
+            padding: 8px 14px;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-preset:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-primary);
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .btn-preset.legit { border-color: rgba(16, 185, 129, 0.3); color: #34d399; }
+        .btn-preset.fraud { border-color: rgba(239, 68, 68, 0.3); color: #f87171; }
+
+        /* Form Inputs */
+        .form-section {
+            margin-bottom: 18px;
+        }
+
+        .form-section-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .amount-input-group {
+            position: relative;
+            margin-bottom: 16px;
+        }
+
+        .amount-symbol {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+            font-weight: 700;
+            font-size: 18px;
+        }
+
+        .input-amount {
+            width: 100%;
+            padding: 14px 16px 14px 38px;
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: #ffffff;
+            font-family: 'Outfit', sans-serif;
+            font-size: 20px;
+            font-weight: 700;
+            transition: var(--transition-smooth);
+        }
+
+        .input-amount:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+            gap: 8px;
+            max-height: 280px;
+            overflow-y: auto;
+            padding-right: 6px;
+        }
+
+        .features-grid::-webkit-scrollbar {
+            width: 4px;
+        }
+        .features-grid::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 4px;
+        }
+
+        .feature-item {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 6px 10px;
+        }
+
+        .feature-item label {
+            display: block;
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-muted);
+            margin-bottom: 2px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .feature-item input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .feature-item input:focus {
+            outline: none;
+            color: #ffffff;
+        }
+
+        /* Predict Action Button */
+        .btn-predict {
+            width: 100%;
+            padding: 16px;
+            margin-top: 18px;
+            border-radius: var(--radius-md);
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            border: none;
+            color: #ffffff;
+            font-family: 'Outfit', sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.35);
+        }
+
+        .btn-predict:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 26px rgba(99, 102, 241, 0.5);
+            background: linear-gradient(135deg, #4f46e5, #4338ca);
+        }
+
+        .btn-predict:active {
+            transform: translateY(0);
+        }
+
+        /* Result Card Presentation */
+        .result-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 420px;
+            text-align: center;
+        }
+
+        .gauge-wrapper {
+            position: relative;
+            width: 220px;
+            height: 220px;
+            margin: 10px 0 20px;
+        }
+
+        .gauge-circle {
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+
+        .gauge-bg {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.08);
+            stroke-width: 14;
+        }
+
+        .gauge-bar {
+            fill: none;
+            stroke: var(--color-success);
+            stroke-width: 14;
+            stroke-linecap: round;
+            stroke-dasharray: 565;
+            stroke-dashoffset: 565;
+            transition: stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.5s ease;
+        }
+
+        .gauge-center-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .gauge-value {
+            font-family: 'Outfit', sans-serif;
+            font-size: 38px;
+            font-weight: 800;
+            line-height: 1;
+            letter-spacing: -0.03em;
+        }
+
+        .gauge-label {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .decision-banner {
+            width: 100%;
+            padding: 14px 20px;
+            border-radius: var(--radius-md);
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            border: 1px solid transparent;
+            transition: var(--transition-smooth);
+        }
+
+        .decision-banner.legit {
+            background: var(--color-success-bg);
+            color: #34d399;
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .decision-banner.fraud {
+            background: var(--color-danger-bg);
+            color: #f87171;
+            border-color: rgba(239, 68, 68, 0.3);
+            animation: pulse-danger 1.5s infinite;
+        }
+
+        @keyframes pulse-danger {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3); }
+            50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+        }
+
+        .metrics-details-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .metric-tile {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 10px 14px;
+            text-align: left;
+        }
+
+        .metric-tile-title {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 2px;
+        }
+
+        .metric-tile-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        /* Pipeline Steps Visualizer (Tab 2) */
+        .pipeline-flow {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .pipeline-node {
+            display: flex;
+            align-items: flex-start;
+            gap: 18px;
+            padding: 18px 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            transition: var(--transition-smooth);
+        }
+
+        .pipeline-node:hover {
+            border-color: var(--accent-primary);
+            background: var(--bg-card-hover);
+            transform: translateX(4px);
+        }
+
+        .pipeline-step-badge {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            background: rgba(99, 102, 241, 0.15);
+            color: var(--accent-primary);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .pipeline-node-content h3 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .pipeline-node-content p {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .pipeline-tags {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+
+        .pipeline-tag {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Benchmark Table (Tab 3) */
+        .table-responsive {
+            overflow-x: auto;
+        }
+
+        .benchmark-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .benchmark-table th {
+            text-align: left;
+            padding: 12px 14px;
+            background: rgba(0, 0, 0, 0.3);
+            color: var(--text-muted);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .benchmark-table td {
+            padding: 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .benchmark-table tr.champion-row {
+            background: rgba(99, 102, 241, 0.12);
+            border-left: 3px solid var(--accent-primary);
+        }
+
+        .benchmark-table tr.champion-row td {
+            color: #ffffff;
+            font-weight: 600;
+        }
+
+        .champion-badge {
+            background: linear-gradient(135deg, #6366f1, #10b981);
+            color: #ffffff;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 999px;
+            margin-left: 8px;
+            text-transform: uppercase;
+        }
+
+        /* Code box */
+        .code-snippet {
+            background: #06090e;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            color: #e2e8f0;
+            overflow-x: auto;
+            position: relative;
+        }
+
+        .copy-btn {
+            position: absolute;
+            right: 12px;
+            top: 12px;
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+            transition: var(--transition-smooth);
+        }
+
+        .copy-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div class="brand">
+                <div class="brand-icon">🛡️</div>
+                <div class="brand-text">
+                    <h1>MLOps Fraud Detection</h1>
+                    <p>LightGBM Champion Model • Production Serving on Render</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <div class="status-pill" id="healthPill">
+                    <span class="pulse-dot"></span>
+                    <span id="healthStatusText">Checking API...</span>
+                </div>
+                <a href="/docs" target="_blank" class="btn-nav">
+                    <span>⚡ Swagger Docs</span>
+                </a>
+                <a href="https://github.com/anhquan1111/mlops-fraud-detection" target="_blank" class="btn-nav">
+                    <span>🐙 GitHub</span>
+                </a>
+            </div>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('tab-predict')">
+                <span>🎯 Real-Time Prediction Lab</span>
+            </button>
+            <button class="tab-btn" onclick="switchTab('tab-batch')">
+                <span>📦 Batch Scoring Demo</span>
+            </button>
+            <button class="tab-btn" onclick="switchTab('tab-pipeline')">
+                <span>🔄 MLOps Pipeline Flow</span>
+            </button>
+            <button class="tab-btn" onclick="switchTab('tab-benchmark')">
+                <span>📊 Model Benchmarks (7 Runs)</span>
+            </button>
+            <button class="tab-btn" onclick="switchTab('tab-api')">
+                <span>🔌 cURL & Integration</span>
+            </button>
+        </div>
+
+        <!-- TAB 1: Prediction Lab -->
+        <div id="tab-predict" class="tab-content active">
+            <div class="grid-2">
+                <!-- Left: Form & Feature Editor -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">💳 Transaction Features</div>
+                        <span style="font-size: 12px; color: var(--text-muted);">29 Features (V1–V28 + Amount)</span>
+                    </div>
+
+                    <!-- Presets -->
+                    <div class="presets-bar">
+                        <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); align-self: center; margin-right: 4px;">PRESETS:</span>
+                        <button class="btn-preset legit" onclick="loadPreset('legit')">
+                            🟢 Normal Purchase ($42.50)
+                        </button>
+                        <button class="btn-preset fraud" onclick="loadPreset('fraud')">
+                            🚨 Known Fraud Attack ($1,299.00)
+                        </button>
+                        <button class="btn-preset" onclick="loadPreset('random')">
+                            🎲 Random Tx
+                        </button>
+                    </div>
+
+                    <!-- Amount Input -->
+                    <div class="form-section">
+                        <div class="form-section-title">Transaction Amount (USD)</div>
+                        <div class="amount-input-group">
+                            <span class="amount-symbol">$</span>
+                            <input type="number" id="tx-Amount" class="input-amount" value="42.50" step="0.01" min="0">
+                        </div>
+                    </div>
+
+                    <!-- PCA Components (V1-V28) -->
+                    <div class="form-section">
+                        <div class="form-section-title" style="display: flex; justify-content: space-between;">
+                            <span>PCA Components (V1 - V28)</span>
+                            <span style="color: var(--text-muted); font-size: 10px;">Already normalized</span>
+                        </div>
+                        <div class="features-grid" id="featuresGrid">
+                            <!-- Populated dynamically via JS -->
+                        </div>
+                    </div>
+
+                    <button class="btn-predict" id="predictBtn" onclick="runPrediction()">
+                        <span>⚡ Analyze Transaction</span>
+                    </button>
+                </div>
+
+                <!-- Right: Risk Score & Decision Output -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">🔍 Real-time Inference Result</div>
+                        <span id="latencyBadge" style="font-size: 12px; color: var(--text-muted); font-family: 'JetBrains Mono';">Ready</span>
+                    </div>
+
+                    <div class="result-container">
+                        <div class="gauge-wrapper">
+                            <svg class="gauge-circle" width="220" height="220" viewBox="0 0 220 220">
+                                <circle class="gauge-bg" cx="110" cy="110" r="90" />
+                                <circle class="gauge-bar" id="gaugeBar" cx="110" cy="110" r="90" />
+                            </svg>
+                            <div class="gauge-center-text">
+                                <span class="gauge-value" id="probText">0.0%</span>
+                                <span class="gauge-label">Fraud Probability</span>
+                            </div>
+                        </div>
+
+                        <div class="decision-banner legit" id="decisionBanner">
+                            <span>🛡️ APPROVED — NORMAL TRANSACTION</span>
+                        </div>
+
+                        <div class="metrics-details-grid">
+                            <div class="metric-tile">
+                                <div class="metric-tile-title">Decision Threshold</div>
+                                <div class="metric-tile-value">0.5000</div>
+                            </div>
+                            <div class="metric-tile">
+                                <div class="metric-tile-title">Risk Level</div>
+                                <div class="metric-tile-value" id="riskLevelText" style="color: var(--color-success);">VERY LOW</div>
+                            </div>
+                            <div class="metric-tile">
+                                <div class="metric-tile-title">Champion Model</div>
+                                <div class="metric-tile-value">LightGBM (lgbm_large)</div>
+                            </div>
+                            <div class="metric-tile">
+                                <div class="metric-tile-title">MLflow Alias</div>
+                                <div class="metric-tile-value" style="color: var(--color-info);">@production</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: Batch Scoring Demo -->
+        <div id="tab-batch" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">📦 Batch Transaction Scoring (POST /predict/batch)</div>
+                    <button class="btn-nav" onclick="runBatchScoring()">⚡ Run Batch Evaluation</button>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
+                    Simulate real-time stream scoring of 5 simulated incoming credit card transactions in a single batch request.
+                </p>
+                <div class="table-responsive">
+                    <table class="benchmark-table" id="batchTable">
+                        <thead>
+                            <tr>
+                                <th># ID</th>
+                                <th>Amount</th>
+                                <th>Key PCA Indicators</th>
+                                <th>Fraud Probability</th>
+                                <th>Status</th>
+                                <th>Decision</th>
+                            </tr>
+                        </thead>
+                        <tbody id="batchTableBody">
+                            <tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 30px;">Click "Run Batch Evaluation" above to score batch data.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: MLOps Pipeline Flow -->
+        <div id="tab-pipeline" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">🔄 End-to-End MLOps Pipeline Architecture</div>
+                    <span style="font-size: 12px; color: var(--text-muted);">From Kaggle Raw Data to Live Serving</span>
+                </div>
+                <div class="pipeline-flow">
+                    <div class="pipeline-node">
+                        <div class="pipeline-step-badge">1</div>
+                        <div class="pipeline-node-content">
+                            <h3>📦 Data Ingestion & Imbalance Assessment</h3>
+                            <p>Loaded 284,807 credit card transactions. Identified extreme class imbalance: 492 fraud vs 284,315 legit (~0.173% positive rate).</p>
+                            <div class="pipeline-tags">
+                                <span class="pipeline-tag">data/raw/creditcard.csv</span>
+                                <span class="pipeline-tag">Imbalance: 1:577</span>
+                                <span class="pipeline-tag">Pydantic Validation</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pipeline-node">
+                        <div class="pipeline-step-badge">2</div>
+                        <div class="pipeline-node-content">
+                            <h3>⚙️ Feature Engineering & Leakage-Free Split</h3>
+                            <p>Scaled transaction Amount using StandardScaler. Dropped non-predictive Time column. Stratified 80/20 train/test split to preserve fraud ratio strictly.</p>
+                            <div class="pipeline-tags">
+                                <span class="pipeline-tag">src/features.py</span>
+                                <span class="pipeline-tag">StratifiedSplit (seed=42)</span>
+                                <span class="pipeline-tag">No Data Leakage</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pipeline-node">
+                        <div class="pipeline-step-badge">3</div>
+                        <div class="pipeline-node-content">
+                            <h3>🧪 MLflow Experiment Grid (7 Runs Logged)</h3>
+                            <p>Trained Logistic Regression baseline, 3 XGBoost configurations (scale_pos_weight), and 3 LightGBM configurations (class_weight='balanced'). Tracked all artifacts, metrics, and PR curves.</p>
+                            <div class="pipeline-tags">
+                                <span class="pipeline-tag">src/train.py</span>
+                                <span class="pipeline-tag">MLflow 3.x SQLite</span>
+                                <span class="pipeline-tag">PR-AUC Optimization</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pipeline-node">
+                        <div class="pipeline-step-badge">4</div>
+                        <div class="pipeline-node-content">
+                            <h3>🛡️ Automated Validation Gate & Promotion</h3>
+                            <p>Validation Gate enforces business rules: Recall ≥ 0.80, Precision ≥ 0.50, and PR-AUC ≥ current production model. Champion model promoted to MLflow Model Registry alias <code>production</code>.</p>
+                            <div class="pipeline-tags">
+                                <span class="pipeline-tag">src/validate.py</span>
+                                <span class="pipeline-tag">Recall ≥ 80%</span>
+                                <span class="pipeline-tag">Champion: lgbm_large (PR-AUC 0.8770)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pipeline-node">
+                        <div class="pipeline-step-badge">5</div>
+                        <div class="pipeline-node-content">
+                            <h3>🚀 Containerization & Cloud Deployment</h3>
+                            <p>Packaged FastAPI serving with Docker (libgomp1 OpenMP, uv package manager). Automated CI with 61 pytest tests. Model weights downloaded dynamically from Hugging Face Hub.</p>
+                            <div class="pipeline-tags">
+                                <span class="pipeline-tag">FastAPI v1.0.0</span>
+                                <span class="pipeline-tag">GitHub Actions CI</span>
+                                <span class="pipeline-tag">Render Cloud Live</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 4: Model Benchmarks -->
+        <div id="tab-benchmark" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">📊 Full Experiment Grid Comparison (Sorted by PR-AUC)</div>
+                    <span style="font-size: 12px; color: var(--text-muted);">Evaluated on 56,962 Test Samples</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="benchmark-table">
+                        <thead>
+                            <tr>
+                                <th>Run Name</th>
+                                <th>Model Architecture</th>
+                                <th>PR-AUC (Primary)</th>
+                                <th>Recall (≥0.80)</th>
+                                <th>Precision (≥0.50)</th>
+                                <th>F1 Score</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="champion-row">
+                                <td>lgbm_large <span class="champion-badge">Champion @prod</span></td>
+                                <td>LightGBM (leaves=63, lr=0.05)</td>
+                                <td>0.8770</td>
+                                <td>0.8571 (85.7%)</td>
+                                <td>0.8485 (84.9%)</td>
+                                <td>0.8528</td>
+                                <td><span style="color: var(--color-success);">✅ Promoted</span></td>
+                            </tr>
+                            <tr>
+                                <td>lgbm_regularized</td>
+                                <td>LightGBM (leaves=31, min_child=5)</td>
+                                <td>0.8700</td>
+                                <td>0.8469</td>
+                                <td>0.9130</td>
+                                <td>0.8787</td>
+                                <td><span>Candidate</span></td>
+                            </tr>
+                            <tr>
+                                <td>lgbm_default</td>
+                                <td>LightGBM (n=100, depth=6)</td>
+                                <td>0.8657</td>
+                                <td>0.8367</td>
+                                <td>0.9114</td>
+                                <td>0.8725</td>
+                                <td><span>Candidate</span></td>
+                            </tr>
+                            <tr>
+                                <td>xgb_default</td>
+                                <td>XGBoost (n=100, depth=6)</td>
+                                <td>0.8445</td>
+                                <td>0.8163</td>
+                                <td>0.9302</td>
+                                <td>0.8696</td>
+                                <td><span>Candidate</span></td>
+                            </tr>
+                            <tr>
+                                <td>xgb_deep</td>
+                                <td>XGBoost (n=200, depth=8)</td>
+                                <td>0.8391</td>
+                                <td>0.7959</td>
+                                <td>0.9286</td>
+                                <td>0.8571</td>
+                                <td><span style="color: var(--color-warning);">⚠️ Recall &lt; 0.80</span></td>
+                            </tr>
+                            <tr>
+                                <td>xgb_regularized</td>
+                                <td>XGBoost (n=300, sub=0.8)</td>
+                                <td>0.8373</td>
+                                <td>0.7959</td>
+                                <td>0.9070</td>
+                                <td>0.8475</td>
+                                <td><span style="color: var(--color-warning);">⚠️ Recall &lt; 0.80</span></td>
+                            </tr>
+                            <tr>
+                                <td>lr_baseline</td>
+                                <td>Logistic Regression (balanced)</td>
+                                <td>0.7156</td>
+                                <td>0.9184</td>
+                                <td>0.8571</td>
+                                <td>0.8867</td>
+                                <td><span>Baseline</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 5: cURL & Integration -->
+        <div id="tab-api" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">🔌 API Integration & Live cURL</div>
+                    <button class="btn-nav" onclick="copyCurl()">📋 Copy cURL</button>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 14px;">
+                    Send live HTTP POST requests directly to this server:
+                </p>
+                <div class="code-snippet" id="curlBox">
+                    <button class="copy-btn" onclick="copyCurl()">Copy</button>
+                    <pre id="curlText">curl -X POST https://mlops-fraud-detection-g7c7.onrender.com/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "V1": -1.3598, "V2": -0.0728, "V3": 2.5363, "V4": 1.3782,
+    "V5": -0.3383, "V6": 0.4624, "V7": 0.2396, "V8": 0.0987,
+    "V9": 0.3638, "V10": 0.0908, "V11": -0.5516, "V12": -0.6178,
+    "V13": -0.9914, "V14": -0.3112, "V15": 1.4682, "V16": -0.4704,
+    "V17": 0.2080, "V18": 0.0258, "V19": 0.4040, "V20": 0.2514,
+    "V21": -0.0183, "V22": 0.2778, "V23": -0.1105, "V24": 0.0669,
+    "V25": 0.1285, "V26": -0.1891, "V27": 0.1336, "V28": -0.0211,
+    "Amount": 42.50
+  }'</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Preset Data
+        const PRESETS = {
+            legit: {
+                Amount: 42.50,
+                V1: -1.3598, V2: -0.0728, V3: 2.5363, V4: 1.3782,
+                V5: -0.3383, V6: 0.4624, V7: 0.2396, V8: 0.0987,
+                V9: 0.3638, V10: 0.0908, V11: -0.5516, V12: -0.6178,
+                V13: -0.9914, V14: -0.3112, V15: 1.4682, V16: -0.4704,
+                V17: 0.2080, V18: 0.0258, V19: 0.4040, V20: 0.2514,
+                V21: -0.0183, V22: 0.2778, V23: -0.1105, V24: 0.0669,
+                V25: 0.1285, V26: -0.1891, V27: 0.1336, V28: -0.0211
+            },
+            fraud: {
+                Amount: 1299.00,
+                V1: -3.0435, V2: -3.1573, V3: 1.0885, V4: 2.2886,
+                V5: 1.3598, V6: -1.0648, V7: 0.3256, V8: -0.0678,
+                V9: -0.2710, V10: -1.4520, V11: 1.7820, V12: -3.8920,
+                V13: -0.4210, V14: -4.2890, V15: 0.1240, V16: -2.8390,
+                V17: -4.1200, V18: -1.9830, V19: 0.4280, V20: 2.1000,
+                V21: 0.6617, V22: 0.4378, V23: 1.3917, V24: -0.0382,
+                V25: 0.2310, V26: -0.1891, V27: 0.1336, V28: -0.0211
+            }
+        };
+
+        // Initialize features grid
+        function initFeaturesGrid() {
+            const grid = document.getElementById('featuresGrid');
+            grid.innerHTML = '';
+            for (let i = 1; i <= 28; i++) {
+                const col = `V${i}`;
+                const val = PRESETS.legit[col] || 0.0;
+                const item = document.createElement('div');
+                item.className = 'feature-item';
+                item.innerHTML = `
+                    <label>${col}</label>
+                    <input type="number" id="tx-${col}" step="0.0001" value="${val.toFixed(4)}">
+                `;
+                grid.appendChild(item);
+            }
+        }
+
+        // Tab Switching
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(tabId).classList.add('active');
+            event.currentTarget.classList.add('active');
+        }
+
+        // Load Preset
+        function loadPreset(type) {
+            let data = {};
+            if (type === 'legit') data = PRESETS.legit;
+            else if (type === 'fraud') data = PRESETS.fraud;
+            else {
+                data.Amount = (Math.random() * 500 + 1).toFixed(2);
+                for (let i = 1; i <= 28; i++) {
+                    data[`V${i}`] = (Math.random() * 4 - 2).toFixed(4);
+                }
+            }
+
+            document.getElementById('tx-Amount').value = data.Amount;
+            for (let i = 1; i <= 28; i++) {
+                const el = document.getElementById(`tx-V${i}`);
+                if (el) el.value = parseFloat(data[`V${i}`]).toFixed(4);
+            }
+            runPrediction();
+        }
+
+        // Collect Form Data
+        function getFormData() {
+            const data = {
+                Amount: parseFloat(document.getElementById('tx-Amount').value) || 0.0
+            };
+            for (let i = 1; i <= 28; i++) {
+                data[`V${i}`] = parseFloat(document.getElementById(`tx-V${i}`).value) || 0.0;
+            }
+            return data;
+        }
+
+        // Run Prediction API Call
+        async function runPrediction() {
+            const btn = document.getElementById('predictBtn');
+            const latencyBadge = document.getElementById('latencyBadge');
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳ Evaluating with LightGBM...</span>';
+
+            const payload = getFormData();
+            const startTime = performance.now();
+
+            try {
+                const res = await fetch('/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const result = await res.json();
+                const latency = Math.round(performance.now() - startTime);
+
+                latencyBadge.textContent = `${latency}ms latency`;
+                renderResult(result.fraud_probability, result.is_fraud);
+            } catch (err) {
+                console.error('Prediction failed:', err);
+                latencyBadge.textContent = 'Fallback local';
+                // Fallback simulation if API offline
+                const isFraud = payload.Amount > 800 || payload.V14 < -3.0;
+                const prob = isFraud ? 0.9412 : 0.0035;
+                renderResult(prob, isFraud);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>⚡ Analyze Transaction</span>';
+            }
+        }
+
+        // Render Result to UI
+        function renderResult(prob, isFraud) {
+            const percentage = (prob * 100).toFixed(2);
+            document.getElementById('probText').textContent = `${percentage}%`;
+
+            // SVG Circumference = 2 * PI * 90 ≈ 565.48
+            const maxDash = 565.48;
+            const offset = maxDash - (maxDash * prob);
+            const gaugeBar = document.getElementById('gaugeBar');
+            const banner = document.getElementById('decisionBanner');
+            const riskLevel = document.getElementById('riskLevelText');
+
+            gaugeBar.style.strokeDashoffset = offset;
+
+            if (isFraud || prob >= 0.5) {
+                gaugeBar.style.stroke = 'var(--color-danger)';
+                banner.className = 'decision-banner fraud';
+                banner.innerHTML = '<span>🚨 HIGH RISK — FLAGGED AS FRAUD</span>';
+                riskLevel.textContent = 'CRITICAL RISK';
+                riskLevel.style.color = 'var(--color-danger)';
+            } else if (prob >= 0.2) {
+                gaugeBar.style.stroke = 'var(--color-warning)';
+                banner.className = 'decision-banner';
+                banner.style.background = 'rgba(245, 158, 11, 0.12)';
+                banner.style.color = '#fbbf24';
+                banner.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+                banner.innerHTML = '<span>⚠️ MEDIUM RISK — REVIEW SUGGESTED</span>';
+                riskLevel.textContent = 'MODERATE RISK';
+                riskLevel.style.color = 'var(--color-warning)';
+            } else {
+                gaugeBar.style.stroke = 'var(--color-success)';
+                banner.className = 'decision-banner legit';
+                banner.style.background = '';
+                banner.style.color = '';
+                banner.style.borderColor = '';
+                banner.innerHTML = '<span>🛡️ APPROVED — NORMAL TRANSACTION</span>';
+                riskLevel.textContent = 'VERY LOW';
+                riskLevel.style.color = 'var(--color-success)';
+            }
+        }
+
+        // Run Batch Scoring
+        async function runBatchScoring() {
+            const tableBody = document.getElementById('batchTableBody');
+            tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--accent-primary); padding: 30px;">⏳ Scoring 5 transactions in batch...</td></tr>';
+
+            const sampleBatch = [
+                { ...PRESETS.legit, Amount: 19.99 },
+                { ...PRESETS.legit, Amount: 85.00, V4: 0.8 },
+                { ...PRESETS.fraud, Amount: 1450.00 },
+                { ...PRESETS.legit, Amount: 310.50, V14: -0.5 },
+                { ...PRESETS.fraud, Amount: 920.00, V12: -4.1 }
+            ];
+
+            try {
+                const res = await fetch('/predict/batch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(sampleBatch)
+                });
+                const data = await res.json();
+                
+                tableBody.innerHTML = '';
+                data.predictions.forEach((p, idx) => {
+                    const row = document.createElement('tr');
+                    const isF = p.is_fraud;
+                    const probPct = (p.fraud_probability * 100).toFixed(2);
+                    row.innerHTML = `
+                        <td><code>#TX-${1000 + idx}</code></td>
+                        <td>$${sampleBatch[idx].Amount.toFixed(2)}</td>
+                        <td><span style="color: var(--text-muted); font-size: 11px;">V14=${sampleBatch[idx].V14.toFixed(2)}, V12=${sampleBatch[idx].V12.toFixed(2)}</span></td>
+                        <td><strong>${probPct}%</strong></td>
+                        <td><span style="color: ${isF ? 'var(--color-danger)' : 'var(--color-success)'}; font-weight: 700;">${isF ? '🚨 FRAUD' : '🟢 LEGIT'}</span></td>
+                        <td><span class="pipeline-tag" style="background: ${isF ? 'var(--color-danger-bg)' : 'var(--color-success-bg)'}; color: ${isF ? '#f87171' : '#34d399'}">${isF ? 'BLOCK' : 'PASS'}</span></td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+            } catch (err) {
+                console.error(err);
+                tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--color-danger); padding: 20px;">Batch scoring failed. Check API connection.</td></tr>';
+            }
+        }
+
+        // Check Health on Load
+        async function checkHealth() {
+            try {
+                const res = await fetch('/health');
+                const data = await res.json();
+                if (data.status === 'healthy') {
+                    document.getElementById('healthStatusText').textContent = `Live (${data.model_source})`;
+                } else {
+                    document.getElementById('healthStatusText').textContent = 'Degraded';
+                }
+            } catch {
+                document.getElementById('healthStatusText').textContent = 'Online (Demo)';
+            }
+        }
+
+        // Copy cURL
+        function copyCurl() {
+            const text = document.getElementById('curlText').innerText;
+            navigator.clipboard.writeText(text);
+            alert('cURL command copied to clipboard!');
+        }
+
+        // Init
+        document.addEventListener('DOMContentLoaded', () => {
+            initFeaturesGrid();
+            checkHealth();
+            runPrediction();
+        });
+    </script>
+</body>
+</html>

@@ -27,11 +27,14 @@ from typing import Any
 import joblib
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from src.config import DECISION_THRESHOLD, FEATURE_COLS, MLFLOW_TRACKING_URI
+
+DASHBOARD_TEMPLATE_PATH = Path(__file__).parent / "templates" / "dashboard.html"
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -334,23 +337,48 @@ def _predict_one(tx: TransactionInput, threshold: float = DECISION_THRESHOLD) ->
 # ---------------------------------------------------------------------------
 
 
-@app.get("/", summary="API info", tags=["Info"])
-async def root() -> dict:
-    """Return API metadata and model info."""
-    return {
-        "name": "Fraud Detection API",
-        "version": app.version,
-        "description": app.description,
-        "model": _model_info,
-        "endpoints": {
-            "docs": "/docs",
-            "health": "/health",
-            "predict": "/predict",
-            "batch_predict": "/predict/batch",
-        },
-        "threshold": DECISION_THRESHOLD,
-        "feature_count": len(FEATURE_COLS),
-    }
+@app.get("/", summary="Dashboard & API info", tags=["Info"])
+async def root(request: Request) -> Response:
+    """Return interactive HTML dashboard for browser visits, or JSON for API clients."""
+    accept = request.headers.get("accept", "")
+    if "text/html" in accept and DASHBOARD_TEMPLATE_PATH.exists():
+        return HTMLResponse(content=DASHBOARD_TEMPLATE_PATH.read_text(encoding="utf-8"))
+    return JSONResponse(
+        content={
+            "name": "Fraud Detection API",
+            "version": app.version,
+            "description": app.description,
+            "model": _model_info,
+            "endpoints": {
+                "dashboard": "/",
+                "docs": "/docs",
+                "health": "/health",
+                "predict": "/predict",
+                "batch_predict": "/predict/batch",
+            },
+            "threshold": DECISION_THRESHOLD,
+            "feature_count": len(FEATURE_COLS),
+        }
+    )
+
+
+@app.get(
+    "/dashboard",
+    summary="Interactive UI Dashboard",
+    response_class=HTMLResponse,
+    tags=["Info"],
+)
+@app.get(
+    "/demo",
+    summary="Interactive Demo",
+    response_class=HTMLResponse,
+    tags=["Info"],
+)
+async def dashboard() -> HTMLResponse:
+    """Return interactive Web UI dashboard."""
+    if DASHBOARD_TEMPLATE_PATH.exists():
+        return HTMLResponse(content=DASHBOARD_TEMPLATE_PATH.read_text(encoding="utf-8"))
+    return HTMLResponse("<h3>Dashboard template not found</h3>", status_code=404)
 
 
 @app.get("/health", response_model=HealthResponse, summary="Health check", tags=["Info"])
