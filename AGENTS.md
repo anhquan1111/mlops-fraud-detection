@@ -170,7 +170,7 @@ Project này được chia thành **6 sessions** để tối ưu token và giữ
 | 3 | ✅ DONE | FastAPI Serving + Deploy khung | `src/api.py`, `Dockerfile`, `render.yaml`, `scripts/export_model.py`, `scripts/register_model.py`, 18 tests passed, model bundled via HF Hub strategy |
 | 4 | ✅ DONE | XGBoost/LightGBM + Tuning + MLflow Registry | `src/config.py` (XGB/LGBM params), `src/train.py` (7-run experiment grid), `scripts/select_best_model.py`, 7 MLflow runs, best model registered: `fraud-detection-model@production` (lgbm_large: PR-AUC=0.8770, Recall=0.8571, Precision=0.8485) |
 | 5 | ✅ DONE | Validation Gate + Testing + CI/CD | `src/validate.py`, `tests/test_features.py` (16 tests), `tests/test_evaluate.py` (14 tests), `tests/test_validate.py` (11 tests), `.github/workflows/ci.yml`, 61 tests passed, ruff clean |
-| 6 | ⬜ TODO | Final Deploy + README + Model Card | `README.md`, `docs/model_card.md`, deploy bản cuối, polish |
+| 6 | ✅ DONE | Final Deploy + README + Model Card | `README.md`, `docs/model_card.md`, `src/api.py` v1.0.0, AGENTS.md updated |
 
 ### Bootstrap Prompt cho mỗi session mới
 

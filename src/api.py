@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-REGISTERED_MODEL_NAME = "fraud-detection-baseline"
+REGISTERED_MODEL_NAME = "fraud-detection-model"
 MODEL_ALIAS = "production"
 HF_MODEL_FILENAME = "baseline_lr.pkl"
 
@@ -159,11 +159,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Fraud Detection API",
     description=(
-        "Real-time credit card fraud detection using a Logistic Regression baseline model. "
+        "Real-time credit card fraud detection powered by a LightGBM champion model "
+        "(PR-AUC=0.8770, Recall=0.8571, Precision=0.8485). "
         "Input: 29 features (V1–V28 PCA-transformed + Amount scaled). "
         "Output: fraud probability and binary prediction."
     ),
-    version="0.3.0",
+    version="1.0.0",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",

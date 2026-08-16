@@ -130,9 +130,7 @@ def _check_minimum_thresholds(metrics: dict[str, float]) -> list[str]:
     """
     failures = []
     if metrics.get("recall", 0.0) < MIN_RECALL:
-        failures.append(
-            f"Recall {metrics['recall']:.4f} < {MIN_RECALL} (minimum threshold)"
-        )
+        failures.append(f"Recall {metrics['recall']:.4f} < {MIN_RECALL} (minimum threshold)")
     if metrics.get("precision", 0.0) < MIN_PRECISION:
         failures.append(
             f"Precision {metrics['precision']:.4f} < {MIN_PRECISION} (minimum threshold)"
