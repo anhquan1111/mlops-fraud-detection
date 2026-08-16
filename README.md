@@ -15,6 +15,12 @@ End-to-end MLOps pipeline for **real-time credit card fraud detection** on a sev
 
 ---
 
+## 🎬 Live Interactive Demo
+
+![MLOps Fraud Detection Live Demo](docs/figures/demo.gif)
+
+---
+
 ## 📊 Results at a Glance
 
 | Model | PR-AUC | Recall | Precision | F1 |
