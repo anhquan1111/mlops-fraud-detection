@@ -118,10 +118,14 @@ XGBOOST_GRID: list[dict] = [
 # ---------------------------------------------------------------------------
 # LightGBM base hyperparameters
 # ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
-# scale_pos_weight for LGBM is same formula: n_negative / n_positive
+# ⚠️  Do NOT use scale_pos_weight with LightGBM at very high ratios (e.g. 577).
+#    At such extreme ratios, LGBM's internal re-weighting destabilises leaf
+#    splits and produces near-random PR-AUC (~0.09).  Use class_weight='balanced'
+#    instead — it applies per-sample weights through sklearn's API and is
+#    stable across all imbalance ratios.
 
 LIGHTGBM_BASE_PARAMS: dict = {
+    "class_weight": "balanced",  # imbalance fix — stable at any ratio
     "metric": "average_precision",  # PR-AUC equivalent in LGBM
     "random_state": RANDOM_STATE,
     "n_jobs": -1,
@@ -136,14 +140,16 @@ LIGHTGBM_GRID: list[dict] = [
         "learning_rate": 0.1,
         "num_leaves": 31,
         "subsample": 1.0,
+        "colsample_bytree": 1.0,
         "run_name": "lgbm_default",
     },
     {
-        "n_estimators": 200,
+        "n_estimators": 300,
         "max_depth": -1,  # -1 = no limit (LGBM default)
         "learning_rate": 0.05,
         "num_leaves": 63,
-        "subsample": 1.0,
+        "subsample": 0.9,
+        "colsample_bytree": 0.8,
         "run_name": "lgbm_large",
     },
     {
@@ -152,6 +158,8 @@ LIGHTGBM_GRID: list[dict] = [
         "learning_rate": 0.05,
         "num_leaves": 31,
         "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "min_child_samples": 5,  # lower = less regularization, better for rare class
         "run_name": "lgbm_regularized",
     },
 ]

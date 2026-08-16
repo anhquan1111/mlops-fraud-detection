@@ -168,7 +168,7 @@ Project này được chia thành **6 sessions** để tối ưu token và giữ
 | 1 | ✅ DONE | Setup + AGENTS.md + Architecture Design | `.gitignore`, `pyproject.toml`, `AGENTS.md`, `docs/architecture.md` |
 | 2 | ✅ DONE | Data + EDA + Baseline Model + MLflow | `src/config.py`, `src/features.py`, `src/train.py`, `src/evaluate.py`, `notebooks/01_eda.py`, baseline LR tracked in MLflow (PR-AUC=0.7156, Recall=0.9184) |
 | 3 | ✅ DONE | FastAPI Serving + Deploy khung | `src/api.py`, `Dockerfile`, `render.yaml`, `scripts/export_model.py`, `scripts/register_model.py`, 18 tests passed, model bundled via HF Hub strategy |
-| 4 | ✅ DONE | XGBoost/LightGBM + Tuning + MLflow Registry | `src/config.py` (XGB/LGBM params), `src/train.py` (7-run experiment grid), `scripts/select_best_model.py`, 7 MLflow runs, best model registered: `fraud-detection-model@production` (xgb_default: PR-AUC=0.8707, Recall=0.8367, Precision=0.7664) |
+| 4 | ✅ DONE | XGBoost/LightGBM + Tuning + MLflow Registry | `src/config.py` (XGB/LGBM params), `src/train.py` (7-run experiment grid), `scripts/select_best_model.py`, 7 MLflow runs, best model registered: `fraud-detection-model@production` (lgbm_large: PR-AUC=0.8770, Recall=0.8571, Precision=0.8485) |
 | 5 | ⬜ TODO | Validation Gate + Testing + CI/CD | `src/validate.py`, `tests/`, `.github/workflows/`, pytest + ruff + pipeline smoke test |
 | 6 | ⬜ TODO | Final Deploy + README + Model Card | `README.md`, `docs/model_card.md`, deploy bản cuối, polish |
 

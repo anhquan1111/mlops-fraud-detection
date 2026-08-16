@@ -203,8 +203,7 @@ def train_xgboost(
         print_report(metrics, model_name=f"XGBoost ({run_name})")
         mlflow.log_metrics(metrics)
         best_iter = (
-            model.best_iteration if model.best_iteration is not None
-            else params["n_estimators"]
+            model.best_iteration if model.best_iteration is not None else params["n_estimators"]
         )
         mlflow.log_metric("best_iteration", best_iter)
 
@@ -234,9 +233,11 @@ def train_lightgbm(
     y_train: pd.Series,
     y_test: pd.Series,
     grid_params: dict,
-    scale_pos_weight: float,
 ) -> dict[str, float]:
     """Train one LightGBM run with given params and log to MLflow.
+
+    Uses class_weight='balanced' (from LIGHTGBM_BASE_PARAMS) to handle imbalance.
+    scale_pos_weight is NOT used for LGBM — at ratio ~577 it destabilises splits.
 
     Args:
         X_train: Training features.
@@ -244,18 +245,19 @@ def train_lightgbm(
         y_train: Training labels.
         y_test: Test labels.
         grid_params: Experiment-specific params from LIGHTGBM_GRID (includes run_name).
-        scale_pos_weight: Class imbalance ratio (n_neg / n_pos) — same as XGBoost.
 
     Returns:
         Dictionary of evaluation metrics.
     """
+    import lightgbm as lgb
+
     run_name = grid_params.pop("run_name", "lightgbm")
     logger.info("=" * 60)
     logger.info(f"Training: LightGBM -- {run_name}")
     logger.info("=" * 60)
 
-    # Merge base + grid params + scale_pos_weight
-    params = {**LIGHTGBM_BASE_PARAMS, **grid_params, "scale_pos_weight": scale_pos_weight}
+    # Merge base + grid params (no scale_pos_weight — LGBM uses class_weight='balanced')
+    params = {**LIGHTGBM_BASE_PARAMS, **grid_params}
 
     with mlflow.start_run(run_name=run_name) as run:
         run_id = run.info.run_id
@@ -267,15 +269,27 @@ def train_lightgbm(
 
         mlflow.log_params(params)
         mlflow.log_param("threshold", DECISION_THRESHOLD)
-        mlflow.log_param("imbalance_strategy", "scale_pos_weight")
+        mlflow.log_param("imbalance_strategy", "class_weight_balanced")
         mlflow.log_param("n_train_samples", len(X_train))
         mlflow.log_param("n_test_samples", len(X_test))
         mlflow.log_param("n_fraud_train", int(y_train.sum()))
         mlflow.log_param("n_fraud_test", int(y_test.sum()))
 
         model = LGBMClassifier(**params)
-        model.fit(X_train, y_train)
-        logger.info("LightGBM training complete")
+        model.fit(
+            X_train,
+            y_train,
+            eval_set=[(X_test, y_test)],
+            callbacks=[
+                lgb.early_stopping(stopping_rounds=30, verbose=False),
+                lgb.log_evaluation(period=0),  # suppress per-iteration logs
+            ],
+        )
+        best_iter = (
+            model.best_iteration_ if model.best_iteration_ is not None else params["n_estimators"]
+        )
+        logger.info(f"LightGBM training complete (best_iteration={best_iter})")
+        mlflow.log_metric("best_iteration", best_iter)
 
         metrics = evaluate_model(model, X_test, y_test, threshold=DECISION_THRESHOLD)
         print_report(metrics, model_name=f"LightGBM ({run_name})")
@@ -390,7 +404,7 @@ def main() -> None:
     logger.info("Starting LightGBM experiment grid (3 runs) ...")
     for grid_params in copy.deepcopy(LIGHTGBM_GRID):
         run_name = grid_params.get("run_name", "lightgbm")
-        metrics = train_lightgbm(X_train, X_test, y_train, y_test, grid_params, scale_pos_weight)
+        metrics = train_lightgbm(X_train, X_test, y_train, y_test, grid_params)
         results.append(
             {
                 "run_name": run_name,
