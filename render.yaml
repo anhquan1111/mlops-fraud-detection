@@ -10,7 +10,7 @@ services:
       # 1. Upload model: HF_TOKEN=hf_xxx HF_REPO_ID=username/repo uv run python scripts/export_model.py --upload
       # 2. Set these env vars on Render dashboard or uncomment below:
       - key: HF_REPO_ID
-        value: your-username/fraud-detection-model  # ← CHANGE THIS
+        value: votrananhquan/fraud-detection-model
       # HF_TOKEN only needed for private repos — leave unset for public repos
       # - key: HF_TOKEN
       #   fromSecret: HF_TOKEN
