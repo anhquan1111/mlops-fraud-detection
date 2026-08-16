@@ -6,38 +6,47 @@
     <title>MLOps Fraud Detection — Production Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-primary: #0a0e17;
-            --bg-secondary: #111827;
-            --bg-card: rgba(17, 24, 39, 0.85);
-            --bg-card-hover: rgba(31, 41, 55, 0.9);
-            --border-color: rgba(255, 255, 255, 0.08);
-            --border-focus: rgba(99, 102, 241, 0.5);
+            --bg-body: #f8fafc;
+            --bg-card: #ffffff;
+            --bg-card-subtle: #f1f5f9;
+            --bg-input: #ffffff;
+            --border-color: #e2e8f0;
+            --border-hover: #cbd5e1;
             
-            --text-primary: #f9fafb;
-            --text-secondary: #9ca3af;
-            --text-muted: #6b7280;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #64748b;
             
-            --accent-primary: #6366f1;
-            --accent-primary-hover: #4f46e5;
-            --accent-glow: rgba(99, 102, 241, 0.25);
+            --accent-primary: #4f46e5;
+            --accent-primary-hover: #4338ca;
+            --accent-glow: rgba(79, 70, 229, 0.15);
+            --accent-subtle: #eef2ff;
             
-            --color-success: #10b981;
-            --color-success-bg: rgba(16, 185, 129, 0.12);
-            --color-danger: #ef4444;
-            --color-danger-bg: rgba(239, 68, 68, 0.12);
-            --color-warning: #f59e0b;
-            --color-warning-bg: rgba(245, 158, 11, 0.12);
-            --color-info: #38bdf8;
+            --color-success: #059669;
+            --color-success-bg: #ecfdf5;
+            --color-success-border: #a7f3d0;
             
-            --radius-sm: 8px;
-            --radius-md: 12px;
-            --radius-lg: 18px;
-            --radius-xl: 24px;
+            --color-danger: #dc2626;
+            --color-danger-bg: #fef2f2;
+            --color-danger-border: #fecaca;
             
-            --transition-smooth: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            --color-warning: #d97706;
+            --color-warning-bg: #fffbeb;
+            --color-warning-border: #fde68a;
+            
+            --color-info: #0284c7;
+            --color-info-bg: #f0f9ff;
+            
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+            --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02);
+            --shadow-float: 0 10px 30px rgba(0, 0, 0, 0.08);
+            
+            --transition-smooth: all 0.2s ease-in-out;
         }
 
         * {
@@ -48,35 +57,29 @@
 
         body {
             font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-            background-color: var(--bg-primary);
+            background-color: var(--bg-body);
             color: var(--text-primary);
             line-height: 1.6;
             min-height: 100vh;
-            background-image: 
-                radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.12) 0%, transparent 40%),
-                radial-gradient(circle at 85% 85%, rgba(16, 185, 129, 0.08) 0%, transparent 40%),
-                radial-gradient(circle at 50% 50%, rgba(14, 165, 233, 0.05) 0%, transparent 60%);
-            background-attachment: fixed;
         }
 
         .container {
-            max-width: 1240px;
+            max-width: 1200px;
             margin: 0 auto;
             padding: 24px 20px 60px;
         }
 
-        /* Top Header */
+        /* Header */
         header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             padding: 16px 24px;
             background: var(--bg-card);
-            backdrop-filter: blur(16px);
             border: 1px solid var(--border-color);
             border-radius: var(--radius-lg);
             margin-bottom: 24px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            box-shadow: var(--shadow-card);
         }
 
         .brand {
@@ -85,134 +88,128 @@
             gap: 14px;
         }
 
-        .brand-icon {
-            width: 44px;
-            height: 44px;
-            border-radius: 12px;
-            background: linear-gradient(135deg, #6366f1, #3b82f6, #10b981);
+        .brand-badge {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-md);
+            background: linear-gradient(135deg, #4f46e5, #0ea5e9);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 22px;
-            box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
+            color: #ffffff;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800;
+            font-size: 18px;
         }
 
         .brand-text h1 {
             font-family: 'Outfit', sans-serif;
-            font-size: 20px;
+            font-size: 19px;
             font-weight: 700;
-            letter-spacing: -0.02em;
-            background: linear-gradient(to right, #ffffff, #cbd5e1);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: var(--text-primary);
+            letter-spacing: -0.01em;
         }
 
         .brand-text p {
             font-size: 12px;
-            color: var(--text-secondary);
+            color: var(--text-muted);
         }
 
         .header-actions {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
         }
 
         .status-pill {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 6px 14px;
-            background: rgba(16, 185, 129, 0.1);
-            border: 1px solid rgba(16, 185, 129, 0.25);
+            padding: 6px 12px;
+            background: var(--color-success-bg);
+            border: 1px solid var(--color-success-border);
             border-radius: 999px;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 600;
             color: var(--color-success);
         }
 
         .pulse-dot {
-            width: 8px;
-            height: 8px;
+            width: 7px;
+            height: 7px;
             border-radius: 50%;
             background-color: var(--color-success);
-            box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+            box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.5);
             animation: pulse-ring 2s infinite;
         }
 
         @keyframes pulse-ring {
-            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-            70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
-            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.5); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(5, 150, 105, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(5, 150, 105, 0); }
         }
 
         .btn-nav {
-            padding: 8px 14px;
-            background: rgba(255, 255, 255, 0.05);
+            padding: 7px 14px;
+            background: #ffffff;
             border: 1px solid var(--border-color);
-            color: var(--text-primary);
+            color: var(--text-secondary);
             text-decoration: none;
             border-radius: var(--radius-sm);
             font-size: 13px;
-            font-weight: 500;
+            font-weight: 600;
             transition: var(--transition-smooth);
-            display: flex;
-            align-items: center;
-            gap: 6px;
         }
 
         .btn-nav:hover {
-            background: rgba(255, 255, 255, 0.1);
-            border-color: rgba(255, 255, 255, 0.2);
-            transform: translateY(-1px);
+            background: var(--bg-card-subtle);
+            color: var(--text-primary);
+            border-color: var(--border-hover);
         }
 
-        /* Tab Navigation */
+        /* Tabs */
         .tabs {
             display: flex;
-            gap: 8px;
+            gap: 6px;
             background: var(--bg-card);
             padding: 6px;
             border-radius: var(--radius-md);
             border: 1px solid var(--border-color);
             margin-bottom: 24px;
+            box-shadow: var(--shadow-card);
             overflow-x: auto;
         }
 
         .tab-btn {
             flex: 1;
-            padding: 10px 18px;
+            padding: 9px 16px;
             background: transparent;
             border: none;
             border-radius: var(--radius-sm);
             color: var(--text-secondary);
             font-family: inherit;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 600;
             cursor: pointer;
             transition: var(--transition-smooth);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
             white-space: nowrap;
         }
 
         .tab-btn:hover {
             color: var(--text-primary);
-            background: rgba(255, 255, 255, 0.04);
+            background: var(--bg-card-subtle);
         }
 
         .tab-btn.active {
             color: #ffffff;
             background: var(--accent-primary);
-            box-shadow: 0 4px 16px var(--accent-glow);
+            box-shadow: 0 2px 8px var(--accent-glow);
         }
 
         /* Tab Contents */
         .tab-content {
             display: none;
-            animation: fadeIn 0.3s ease;
+            animation: fadeIn 0.25s ease;
         }
 
         .tab-content.active {
@@ -220,11 +217,11 @@
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(6px); }
+            from { opacity: 0; transform: translateY(4px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
-        /* Grid Layout */
+        /* Grid */
         .grid-2 {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -233,18 +230,17 @@
 
         @media (max-width: 900px) {
             .grid-2 { grid-template-columns: 1fr; }
-            header { flex-direction: column; gap: 16px; align-items: flex-start; }
+            header { flex-direction: column; gap: 14px; align-items: flex-start; }
             .header-actions { width: 100%; justify-content: space-between; flex-wrap: wrap; }
         }
 
-        /* Card Styles */
+        /* Card */
         .card {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
             border-radius: var(--radius-lg);
             padding: 24px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
-            backdrop-filter: blur(12px);
+            box-shadow: var(--shadow-card);
         }
 
         .card-header {
@@ -258,74 +254,69 @@
 
         .card-title {
             font-family: 'Outfit', sans-serif;
-            font-size: 18px;
+            font-size: 17px;
             font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            color: var(--text-primary);
         }
 
-        /* Presets Toolbar */
+        /* Presets */
         .presets-bar {
             display: flex;
             gap: 8px;
             flex-wrap: wrap;
-            margin-bottom: 16px;
+            margin-bottom: 14px;
             align-items: center;
         }
 
         .btn-preset {
-            padding: 8px 14px;
-            border-radius: 999px;
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
             border: 1px solid var(--border-color);
-            background: rgba(255, 255, 255, 0.03);
+            background: var(--bg-card-subtle);
             color: var(--text-secondary);
             font-size: 12px;
             font-weight: 600;
             cursor: pointer;
             transition: var(--transition-smooth);
-            display: flex;
-            align-items: center;
-            gap: 6px;
         }
 
         .btn-preset:hover {
-            background: rgba(255, 255, 255, 0.08);
+            background: #ffffff;
             color: var(--text-primary);
-            border-color: rgba(255, 255, 255, 0.2);
-            transform: translateY(-1px);
+            border-color: var(--border-hover);
         }
 
         .btn-preset.active-preset {
-            background: rgba(99, 102, 241, 0.2);
+            background: var(--accent-subtle);
             border-color: var(--accent-primary);
-            color: #ffffff;
+            color: var(--accent-primary);
         }
 
-        .btn-preset.legit { border-color: rgba(16, 185, 129, 0.3); color: #34d399; }
-        .btn-preset.fraud { border-color: rgba(239, 68, 68, 0.3); color: #f87171; }
+        .btn-preset.legit { color: var(--color-success); }
+        .btn-preset.fraud { color: var(--color-danger); }
 
         .preset-hint {
-            font-size: 11px;
+            font-size: 12px;
             color: var(--accent-primary);
-            background: rgba(99, 102, 241, 0.1);
-            padding: 4px 10px;
-            border-radius: 6px;
+            background: var(--accent-subtle);
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
             display: inline-block;
-            margin-bottom: 14px;
+            margin-bottom: 16px;
+            font-weight: 500;
         }
 
-        /* Form Inputs */
+        /* Form Controls */
         .form-section {
             margin-bottom: 18px;
         }
 
         .form-section-title {
-            font-size: 12px;
+            font-size: 11px;
             text-transform: uppercase;
-            letter-spacing: 0.08em;
+            letter-spacing: 0.06em;
             color: var(--text-muted);
-            margin-bottom: 10px;
+            margin-bottom: 8px;
             font-weight: 700;
         }
 
@@ -336,23 +327,23 @@
 
         .amount-symbol {
             position: absolute;
-            left: 16px;
+            left: 14px;
             top: 50%;
             transform: translateY(-50%);
-            color: var(--text-secondary);
+            color: var(--text-muted);
             font-weight: 700;
             font-size: 18px;
         }
 
         .input-amount {
             width: 100%;
-            padding: 14px 16px 14px 38px;
-            background: rgba(0, 0, 0, 0.25);
+            padding: 12px 16px 12px 34px;
+            background: var(--bg-input);
             border: 1px solid var(--border-color);
             border-radius: var(--radius-md);
-            color: #ffffff;
+            color: var(--text-primary);
             font-family: 'Outfit', sans-serif;
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 700;
             transition: var(--transition-smooth);
         }
@@ -367,30 +358,31 @@
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
             gap: 8px;
-            max-height: 250px;
+            max-height: 240px;
             overflow-y: auto;
-            padding-right: 6px;
+            padding-right: 4px;
         }
 
         .features-grid::-webkit-scrollbar {
-            width: 4px;
+            width: 5px;
         }
         .features-grid::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.15);
+            background: #cbd5e1;
             border-radius: 4px;
         }
 
         .feature-item {
-            background: rgba(0, 0, 0, 0.2);
+            background: var(--bg-card-subtle);
             border: 1px solid var(--border-color);
             border-radius: var(--radius-sm);
-            padding: 6px 10px;
+            padding: 6px 8px;
             transition: var(--transition-smooth);
         }
 
         .feature-item:focus-within {
             border-color: var(--accent-primary);
-            background: rgba(99, 102, 241, 0.08);
+            background: #ffffff;
+            box-shadow: 0 0 0 2px var(--accent-glow);
         }
 
         .feature-item label {
@@ -409,60 +401,50 @@
             color: var(--text-primary);
             font-family: 'JetBrains Mono', monospace;
             font-size: 12px;
-            font-weight: 500;
+            font-weight: 600;
         }
 
         .feature-item input:focus {
             outline: none;
-            color: #ffffff;
         }
 
-        /* Predict Action Button */
+        /* Predict Button */
         .btn-predict {
             width: 100%;
-            padding: 16px;
-            margin-top: 18px;
+            padding: 14px;
+            margin-top: 16px;
             border-radius: var(--radius-md);
-            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            background: var(--accent-primary);
             border: none;
             color: #ffffff;
             font-family: 'Outfit', sans-serif;
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 700;
             cursor: pointer;
             transition: var(--transition-smooth);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.35);
         }
 
         .btn-predict:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 26px rgba(99, 102, 241, 0.5);
-            background: linear-gradient(135deg, #4f46e5, #4338ca);
+            background: var(--accent-primary-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 14px var(--accent-glow);
         }
 
-        .btn-predict:active {
-            transform: translateY(0);
-        }
-
-        /* Result Card Presentation */
+        /* Result Presentation */
         .result-container {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            min-height: 420px;
+            min-height: 400px;
             text-align: center;
         }
 
         .gauge-wrapper {
             position: relative;
-            width: 220px;
-            height: 220px;
-            margin: 10px 0 20px;
+            width: 200px;
+            height: 200px;
+            margin: 10px 0 16px;
         }
 
         .gauge-circle {
@@ -472,17 +454,17 @@
 
         .gauge-bg {
             fill: none;
-            stroke: rgba(255, 255, 255, 0.08);
-            stroke-width: 14;
+            stroke: #e2e8f0;
+            stroke-width: 12;
         }
 
         .gauge-bar {
             fill: none;
             stroke: var(--color-success);
-            stroke-width: 14;
+            stroke-width: 12;
             stroke-linecap: round;
-            stroke-dasharray: 565;
-            stroke-dashoffset: 565;
+            stroke-dasharray: 515;
+            stroke-dashoffset: 515;
             transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.4s ease;
         }
 
@@ -498,59 +480,49 @@
 
         .gauge-value {
             font-family: 'Outfit', sans-serif;
-            font-size: 38px;
+            font-size: 34px;
             font-weight: 800;
             line-height: 1;
-            letter-spacing: -0.03em;
+            color: var(--text-primary);
         }
 
         .gauge-label {
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.1em;
+            letter-spacing: 0.08em;
             color: var(--text-muted);
             margin-top: 4px;
         }
 
         .decision-banner {
             width: 100%;
-            padding: 14px 20px;
+            padding: 12px 18px;
             border-radius: var(--radius-md);
             font-family: 'Outfit', sans-serif;
             font-weight: 700;
-            font-size: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            margin-bottom: 20px;
+            font-size: 15px;
+            margin-bottom: 18px;
             border: 1px solid transparent;
             transition: var(--transition-smooth);
         }
 
         .decision-banner.legit {
             background: var(--color-success-bg);
-            color: #34d399;
-            border-color: rgba(16, 185, 129, 0.3);
+            color: var(--color-success);
+            border-color: var(--color-success-border);
         }
 
         .decision-banner.fraud {
             background: var(--color-danger-bg);
-            color: #f87171;
-            border-color: rgba(239, 68, 68, 0.3);
-            animation: pulse-danger 1.5s infinite;
+            color: var(--color-danger);
+            border-color: var(--color-danger-border);
         }
 
         .decision-banner.review {
             background: var(--color-warning-bg);
-            color: #fbbf24;
-            border-color: rgba(245, 158, 11, 0.3);
-        }
-
-        @keyframes pulse-danger {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3); }
-            50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+            color: var(--color-warning);
+            border-color: var(--color-warning-border);
         }
 
         .metrics-details-grid {
@@ -561,7 +533,7 @@
         }
 
         .metric-tile {
-            background: rgba(0, 0, 0, 0.2);
+            background: var(--bg-card-subtle);
             border: 1px solid var(--border-color);
             border-radius: var(--radius-sm);
             padding: 10px 14px;
@@ -572,16 +544,17 @@
             font-size: 11px;
             color: var(--text-muted);
             margin-bottom: 2px;
+            font-weight: 600;
         }
 
         .metric-tile-value {
             font-family: 'JetBrains Mono', monospace;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 700;
             color: var(--text-primary);
         }
 
-        /* Batch Scoring Stats Cards */
+        /* Batch Scoring */
         .batch-stats-bar {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -590,7 +563,7 @@
         }
 
         .batch-stat-card {
-            background: rgba(0, 0, 0, 0.3);
+            background: var(--bg-card-subtle);
             border: 1px solid var(--border-color);
             border-radius: var(--radius-md);
             padding: 12px 16px;
@@ -608,45 +581,47 @@
             font-family: 'Outfit', sans-serif;
             font-size: 22px;
             font-weight: 800;
+            color: var(--text-primary);
             margin-top: 2px;
         }
 
         .batch-controls {
             display: flex;
-            gap: 10px;
+            gap: 12px;
             align-items: center;
             flex-wrap: wrap;
             margin-bottom: 18px;
-            background: rgba(0, 0, 0, 0.2);
-            padding: 12px 16px;
+            background: var(--bg-card-subtle);
+            padding: 10px 16px;
             border-radius: var(--radius-md);
             border: 1px solid var(--border-color);
         }
 
         .select-custom {
-            background: rgba(255, 255, 255, 0.06);
+            background: #ffffff;
             border: 1px solid var(--border-color);
-            color: #ffffff;
-            padding: 8px 12px;
+            color: var(--text-primary);
+            padding: 7px 12px;
             border-radius: var(--radius-sm);
             font-family: inherit;
             font-size: 13px;
+            font-weight: 500;
             outline: none;
         }
 
-        /* Pipeline Steps Visualizer (Tab 3) */
+        /* Pipeline Steps */
         .pipeline-flow {
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 12px;
         }
 
         .pipeline-node {
             display: flex;
             align-items: flex-start;
-            gap: 18px;
-            padding: 18px 20px;
-            background: var(--bg-card);
+            gap: 16px;
+            padding: 16px 20px;
+            background: #ffffff;
             border: 1px solid var(--border-color);
             border-radius: var(--radius-md);
             transition: var(--transition-smooth);
@@ -654,34 +629,31 @@
 
         .pipeline-node:hover {
             border-color: var(--accent-primary);
-            background: var(--bg-card-hover);
-            transform: translateX(4px);
+            box-shadow: var(--shadow-card);
         }
 
         .pipeline-step-badge {
-            width: 38px;
-            height: 38px;
-            border-radius: 10px;
-            background: rgba(99, 102, 241, 0.15);
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-sm);
+            background: var(--accent-subtle);
             color: var(--accent-primary);
-            border: 1px solid rgba(99, 102, 241, 0.3);
+            border: 1px solid rgba(79, 70, 229, 0.2);
             display: flex;
             align-items: center;
             justify-content: center;
             font-family: 'Outfit', sans-serif;
             font-weight: 800;
-            font-size: 16px;
+            font-size: 14px;
             flex-shrink: 0;
         }
 
         .pipeline-node-content h3 {
             font-family: 'Outfit', sans-serif;
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 700;
             margin-bottom: 4px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            color: var(--text-primary);
         }
 
         .pipeline-node-content p {
@@ -700,12 +672,13 @@
             font-size: 11px;
             padding: 2px 8px;
             border-radius: 4px;
-            background: rgba(255, 255, 255, 0.05);
+            background: var(--bg-card-subtle);
             color: var(--text-muted);
             font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
         }
 
-        /* Benchmark Table (Tab 4) */
+        /* Benchmark Table */
         .table-responsive {
             overflow-x: auto;
         }
@@ -718,51 +691,75 @@
 
         .benchmark-table th {
             text-align: left;
-            padding: 12px 14px;
-            background: rgba(0, 0, 0, 0.3);
+            padding: 10px 14px;
+            background: var(--bg-card-subtle);
             color: var(--text-muted);
             font-size: 11px;
             text-transform: uppercase;
-            letter-spacing: 0.06em;
+            letter-spacing: 0.05em;
             border-bottom: 1px solid var(--border-color);
         }
 
         .benchmark-table td {
             padding: 12px 14px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            border-bottom: 1px solid var(--border-color);
             font-family: 'JetBrains Mono', monospace;
+            color: var(--text-secondary);
         }
 
         .benchmark-table tr.champion-row {
-            background: rgba(99, 102, 241, 0.12);
+            background: var(--accent-subtle);
             border-left: 3px solid var(--accent-primary);
         }
 
         .benchmark-table tr.champion-row td {
-            color: #ffffff;
+            color: var(--text-primary);
             font-weight: 600;
         }
 
         .champion-badge {
-            background: linear-gradient(135deg, #6366f1, #10b981);
+            background: var(--accent-primary);
             color: #ffffff;
             font-size: 10px;
             font-weight: 700;
-            padding: 3px 8px;
+            padding: 2px 8px;
             border-radius: 999px;
             margin-left: 8px;
             text-transform: uppercase;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        /* Status tags in table */
+        .status-badge-table {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .status-badge-table.pass {
+            background: var(--color-success-bg);
+            color: var(--color-success);
+            border: 1px solid var(--color-success-border);
+        }
+
+        .status-badge-table.block {
+            background: var(--color-danger-bg);
+            color: var(--color-danger);
+            border: 1px solid var(--color-danger-border);
         }
 
         /* Code box */
         .code-snippet {
-            background: #06090e;
+            background: #0f172a;
             border: 1px solid var(--border-color);
             border-radius: var(--radius-md);
             padding: 16px;
             font-family: 'JetBrains Mono', monospace;
             font-size: 13px;
-            color: #e2e8f0;
+            color: #f8fafc;
             overflow-x: auto;
             position: relative;
         }
@@ -772,10 +769,10 @@
             right: 12px;
             top: 12px;
             padding: 6px 12px;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: var(--radius-sm);
-            color: var(--text-secondary);
+            color: #ffffff;
             cursor: pointer;
             font-size: 11px;
             font-weight: 600;
@@ -783,8 +780,7 @@
         }
 
         .copy-btn:hover {
-            background: rgba(255, 255, 255, 0.15);
-            color: #ffffff;
+            background: rgba(255, 255, 255, 0.2);
         }
     </style>
 </head>
@@ -793,7 +789,7 @@
         <!-- Header -->
         <header>
             <div class="brand">
-                <div class="brand-icon">🛡️</div>
+                <div class="brand-badge">FD</div>
                 <div class="brand-text">
                     <h1>MLOps Fraud Detection</h1>
                     <p>LightGBM Champion Model • Production Serving on Render</p>
@@ -804,31 +800,27 @@
                     <span class="pulse-dot"></span>
                     <span id="healthStatusText">Checking API...</span>
                 </div>
-                <a href="/docs" target="_blank" class="btn-nav">
-                    <span>⚡ Swagger Docs</span>
-                </a>
-                <a href="https://github.com/anhquan1111/mlops-fraud-detection" target="_blank" class="btn-nav">
-                    <span>🐙 GitHub</span>
-                </a>
+                <a href="/docs" target="_blank" class="btn-nav">Swagger Docs</a>
+                <a href="https://github.com/anhquan1111/mlops-fraud-detection" target="_blank" class="btn-nav">GitHub</a>
             </div>
         </header>
 
         <!-- Navigation Tabs -->
         <div class="tabs">
             <button class="tab-btn active" onclick="switchTab('tab-predict')">
-                <span>🎯 Real-Time Prediction Lab</span>
+                Real-Time Prediction Lab
             </button>
             <button class="tab-btn" onclick="switchTab('tab-batch')">
-                <span>📦 Live Batch Scoring Stream</span>
+                Live Batch Scoring Stream
             </button>
             <button class="tab-btn" onclick="switchTab('tab-pipeline')">
-                <span>🔄 MLOps Pipeline Flow</span>
+                MLOps Pipeline Flow
             </button>
             <button class="tab-btn" onclick="switchTab('tab-benchmark')">
-                <span>📊 Model Benchmarks (7 Runs)</span>
+                Model Benchmarks (7 Runs)
             </button>
             <button class="tab-btn" onclick="switchTab('tab-api')">
-                <span>🔌 cURL & Integration</span>
+                cURL & Integration
             </button>
         </div>
 
@@ -838,7 +830,7 @@
                 <!-- Left: Form & Feature Editor -->
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-title">💳 Transaction Input</div>
+                        <div class="card-title">Transaction Input</div>
                         <span style="font-size: 12px; color: var(--text-muted);">29 Features (V1–V28 + Amount)</span>
                     </div>
 
@@ -846,18 +838,18 @@
                     <div class="presets-bar">
                         <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-right: 4px;">LOAD PRESET:</span>
                         <button class="btn-preset legit active-preset" id="presetBtn-legit" onclick="selectPreset('legit')">
-                            🟢 Normal Purchase ($42.50)
+                            Normal Purchase ($42.50)
                         </button>
                         <button class="btn-preset fraud" id="presetBtn-fraud" onclick="selectPreset('fraud')">
-                            🚨 Known Fraud Attack ($1,299.00)
+                            Known Fraud Attack ($1,299.00)
                         </button>
                         <button class="btn-preset" id="presetBtn-random" onclick="selectPreset('random')">
-                            🎲 Random Tx
+                            Random Tx
                         </button>
                     </div>
 
                     <div class="preset-hint" id="presetHint">
-                        💡 Loaded Normal Purchase profile. Click "Analyze Transaction" to execute inference.
+                        Loaded Normal Purchase profile ($42.50). Click "Analyze Transaction" to test.
                     </div>
 
                     <!-- Amount Input -->
@@ -881,22 +873,22 @@
                     </div>
 
                     <button class="btn-predict" id="predictBtn" onclick="runPrediction()">
-                        <span>⚡ Analyze Transaction</span>
+                        Analyze Transaction
                     </button>
                 </div>
 
                 <!-- Right: Risk Score & Decision Output -->
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-title">🔍 Real-time Inference Result</div>
+                        <div class="card-title">Real-time Inference Result</div>
                         <span id="latencyBadge" style="font-size: 12px; color: var(--text-muted); font-family: 'JetBrains Mono';">Awaiting inference</span>
                     </div>
 
                     <div class="result-container">
                         <div class="gauge-wrapper">
-                            <svg class="gauge-circle" width="220" height="220" viewBox="0 0 220 220">
-                                <circle class="gauge-bg" cx="110" cy="110" r="90" />
-                                <circle class="gauge-bar" id="gaugeBar" cx="110" cy="110" r="90" />
+                            <svg class="gauge-circle" width="200" height="200" viewBox="0 0 200 200">
+                                <circle class="gauge-bg" cx="100" cy="100" r="82" />
+                                <circle class="gauge-bar" id="gaugeBar" cx="100" cy="100" r="82" />
                             </svg>
                             <div class="gauge-center-text">
                                 <span class="gauge-value" id="probText">0.02%</span>
@@ -905,7 +897,7 @@
                         </div>
 
                         <div class="decision-banner legit" id="decisionBanner">
-                            <span>🛡️ APPROVED — NORMAL TRANSACTION</span>
+                            APPROVED — NORMAL TRANSACTION
                         </div>
 
                         <div class="metrics-details-grid">
@@ -922,8 +914,8 @@
                                 <div class="metric-tile-value">LightGBM (lgbm_large)</div>
                             </div>
                             <div class="metric-tile">
-                                <div class="metric-tile-title">MLflow Alias</div>
-                                <div class="metric-tile-value" style="color: var(--color-info);">@production</div>
+                                <div class="metric-tile-title">MLflow Registry</div>
+                                <div class="metric-tile-value" style="color: var(--accent-primary);">@production</div>
                             </div>
                         </div>
                     </div>
@@ -935,21 +927,21 @@
         <div id="tab-batch" class="tab-content">
             <div class="card">
                 <div class="card-header">
-                    <div class="card-title">📦 Real-Time Batch Stream Scoring (POST /predict/batch)</div>
-                    <button class="btn-nav" onclick="generateAndScoreBatch()">⚡ Generate & Score New Stream Batch</button>
+                    <div class="card-title">Batch Stream Scoring (POST /predict/batch)</div>
+                    <button class="btn-nav" style="background: var(--accent-primary); color: #ffffff; border: none;" onclick="generateAndScoreBatch()">Generate & Score New Batch</button>
                 </div>
                 
                 <!-- Batch Controls & Filters -->
                 <div class="batch-controls">
-                    <span style="font-size: 12px; font-weight: 700; color: var(--text-muted);">STREAM CONFIG:</span>
-                    <label style="font-size: 12px; color: var(--text-secondary);">Batch Size:</label>
+                    <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">STREAM CONFIG:</span>
+                    <label style="font-size: 12px; color: var(--text-secondary); margin-left: 8px;">Batch Size:</label>
                     <select id="batchSizeSelect" class="select-custom" onchange="generateAndScoreBatch()">
                         <option value="5" selected>5 Transactions</option>
                         <option value="10">10 Transactions</option>
                         <option value="20">20 Transactions</option>
                     </select>
 
-                    <label style="font-size: 12px; color: var(--text-secondary); margin-left: 10px;">Traffic Pattern:</label>
+                    <label style="font-size: 12px; color: var(--text-secondary); margin-left: 12px;">Traffic Profile:</label>
                     <select id="batchPatternSelect" class="select-custom" onchange="generateAndScoreBatch()">
                         <option value="mixed" selected>Realistic Mixed (Normal + Infiltrated Fraud)</option>
                         <option value="heavy_fraud">Fraud Wave Attack (Heavy Fraud)</option>
@@ -961,7 +953,7 @@
                 <div class="batch-stats-bar">
                     <div class="batch-stat-card">
                         <div class="batch-stat-label">Transactions Scored</div>
-                        <div class="batch-stat-num" id="stat-total" style="color: #ffffff;">0</div>
+                        <div class="batch-stat-num" id="stat-total">0</div>
                     </div>
                     <div class="batch-stat-card">
                         <div class="batch-stat-label">Approved (Legit)</div>
@@ -977,7 +969,7 @@
                     </div>
                     <div class="batch-stat-card">
                         <div class="batch-stat-label">API Latency</div>
-                        <div class="batch-stat-num" id="stat-latency" style="color: #cbd5e1;">0ms</div>
+                        <div class="batch-stat-num" id="stat-latency">0ms</div>
                     </div>
                 </div>
 
@@ -995,7 +987,7 @@
                             </tr>
                         </thead>
                         <tbody id="batchTableBody">
-                            <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">Click "Generate & Score New Stream Batch" to run live batch scoring.</td></tr>
+                            <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">Click "Generate & Score New Batch" to execute batch inference.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1006,15 +998,15 @@
         <div id="tab-pipeline" class="tab-content">
             <div class="card">
                 <div class="card-header">
-                    <div class="card-title">🔄 End-to-End MLOps Pipeline Architecture</div>
+                    <div class="card-title">End-to-End MLOps Pipeline Architecture</div>
                     <span style="font-size: 12px; color: var(--text-muted);">From Kaggle Raw Data to Live Serving</span>
                 </div>
                 <div class="pipeline-flow">
                     <div class="pipeline-node">
                         <div class="pipeline-step-badge">1</div>
                         <div class="pipeline-node-content">
-                            <h3>📦 Data Ingestion & Imbalance Assessment</h3>
-                            <p>Loaded 284,807 credit card transactions. Identified extreme class imbalance: 492 fraud vs 284,315 legit (~0.173% positive rate).</p>
+                            <h3>Data Ingestion & Imbalance Assessment</h3>
+                            <p>Loaded 284,807 credit card transactions. Extreme class imbalance: 492 fraud vs 284,315 legit (~0.173% positive rate).</p>
                             <div class="pipeline-tags">
                                 <span class="pipeline-tag">data/raw/creditcard.csv</span>
                                 <span class="pipeline-tag">Imbalance: 1:577</span>
@@ -1026,8 +1018,8 @@
                     <div class="pipeline-node">
                         <div class="pipeline-step-badge">2</div>
                         <div class="pipeline-node-content">
-                            <h3>⚙️ Feature Engineering & Leakage-Free Split</h3>
-                            <p>Scaled transaction Amount using StandardScaler. Dropped non-predictive Time column. Stratified 80/20 train/test split to preserve fraud ratio strictly.</p>
+                            <h3>Feature Engineering & Leakage-Free Split</h3>
+                            <p>Scaled transaction Amount with StandardScaler. Dropped non-predictive Time column. Stratified 80/20 train/test split preserving fraud ratio.</p>
                             <div class="pipeline-tags">
                                 <span class="pipeline-tag">src/features.py</span>
                                 <span class="pipeline-tag">StratifiedSplit (seed=42)</span>
@@ -1039,8 +1031,8 @@
                     <div class="pipeline-node">
                         <div class="pipeline-step-badge">3</div>
                         <div class="pipeline-node-content">
-                            <h3>🧪 MLflow Experiment Grid (7 Runs Logged)</h3>
-                            <p>Trained Logistic Regression baseline, 3 XGBoost configurations (scale_pos_weight), and 3 LightGBM configurations (class_weight='balanced'). Tracked all artifacts, metrics, and PR curves.</p>
+                            <h3>MLflow Experiment Grid (7 Runs Logged)</h3>
+                            <p>Trained Logistic Regression baseline, 3 XGBoost configurations (scale_pos_weight), and 3 LightGBM configurations (class_weight='balanced'). Tracked artifacts and PR curves.</p>
                             <div class="pipeline-tags">
                                 <span class="pipeline-tag">src/train.py</span>
                                 <span class="pipeline-tag">MLflow 3.x SQLite</span>
@@ -1052,8 +1044,8 @@
                     <div class="pipeline-node">
                         <div class="pipeline-step-badge">4</div>
                         <div class="pipeline-node-content">
-                            <h3>🛡️ Automated Validation Gate & Promotion</h3>
-                            <p>Validation Gate enforces business rules: Recall ≥ 0.80, Precision ≥ 0.50, and PR-AUC ≥ current production model. Champion model promoted to MLflow Model Registry alias <code>production</code>.</p>
+                            <h3>Automated Validation Gate & Promotion</h3>
+                            <p>Validation Gate enforces: Recall ≥ 0.80, Precision ≥ 0.50, and PR-AUC ≥ current production model. Champion model promoted to Model Registry alias <code>production</code>.</p>
                             <div class="pipeline-tags">
                                 <span class="pipeline-tag">src/validate.py</span>
                                 <span class="pipeline-tag">Recall ≥ 80%</span>
@@ -1065,8 +1057,8 @@
                     <div class="pipeline-node">
                         <div class="pipeline-step-badge">5</div>
                         <div class="pipeline-node-content">
-                            <h3>🚀 Containerization & Cloud Deployment</h3>
-                            <p>Packaged FastAPI serving with Docker (libgomp1 OpenMP, uv package manager). Automated CI with 61 pytest tests. Model weights downloaded dynamically from Hugging Face Hub.</p>
+                            <h3>Containerization & Cloud Deployment</h3>
+                            <p>FastAPI serving packaged with Docker (libgomp1 OpenMP, uv package manager). CI verified with 61 pytest tests. Model loaded dynamically from Hugging Face Hub.</p>
                             <div class="pipeline-tags">
                                 <span class="pipeline-tag">FastAPI v1.0.0</span>
                                 <span class="pipeline-tag">GitHub Actions CI</span>
@@ -1082,7 +1074,7 @@
         <div id="tab-benchmark" class="tab-content">
             <div class="card">
                 <div class="card-header">
-                    <div class="card-title">📊 Full Experiment Grid Comparison (Sorted by PR-AUC)</div>
+                    <div class="card-title">Full Experiment Grid Comparison (Sorted by PR-AUC)</div>
                     <span style="font-size: 12px; color: var(--text-muted);">Evaluated on 56,962 Test Samples</span>
                 </div>
                 <div class="table-responsive">
@@ -1106,7 +1098,7 @@
                                 <td>0.8571 (85.7%)</td>
                                 <td>0.8485 (84.9%)</td>
                                 <td>0.8528</td>
-                                <td><span style="color: var(--color-success);">✅ Promoted</span></td>
+                                <td><span style="color: var(--color-success); font-weight: 700;">Promoted</span></td>
                             </tr>
                             <tr>
                                 <td>lgbm_regularized</td>
@@ -1115,7 +1107,7 @@
                                 <td>0.8469</td>
                                 <td>0.9130</td>
                                 <td>0.8787</td>
-                                <td><span>Candidate</span></td>
+                                <td>Candidate</td>
                             </tr>
                             <tr>
                                 <td>lgbm_default</td>
@@ -1124,7 +1116,7 @@
                                 <td>0.8367</td>
                                 <td>0.9114</td>
                                 <td>0.8725</td>
-                                <td><span>Candidate</span></td>
+                                <td>Candidate</td>
                             </tr>
                             <tr>
                                 <td>xgb_default</td>
@@ -1133,7 +1125,7 @@
                                 <td>0.8163</td>
                                 <td>0.9302</td>
                                 <td>0.8696</td>
-                                <td><span>Candidate</span></td>
+                                <td>Candidate</td>
                             </tr>
                             <tr>
                                 <td>xgb_deep</td>
@@ -1142,7 +1134,7 @@
                                 <td>0.7959</td>
                                 <td>0.9286</td>
                                 <td>0.8571</td>
-                                <td><span style="color: var(--color-warning);">⚠️ Recall &lt; 0.80</span></td>
+                                <td><span style="color: var(--color-warning);">Recall &lt; 0.80</span></td>
                             </tr>
                             <tr>
                                 <td>xgb_regularized</td>
@@ -1151,7 +1143,7 @@
                                 <td>0.7959</td>
                                 <td>0.9070</td>
                                 <td>0.8475</td>
-                                <td><span style="color: var(--color-warning);">⚠️ Recall &lt; 0.80</span></td>
+                                <td><span style="color: var(--color-warning);">Recall &lt; 0.80</span></td>
                             </tr>
                             <tr>
                                 <td>lr_baseline</td>
@@ -1160,7 +1152,7 @@
                                 <td>0.9184</td>
                                 <td>0.8571</td>
                                 <td>0.8867</td>
-                                <td><span>Baseline</span></td>
+                                <td>Baseline</td>
                             </tr>
                         </tbody>
                     </table>
@@ -1172,8 +1164,8 @@
         <div id="tab-api" class="tab-content">
             <div class="card">
                 <div class="card-header">
-                    <div class="card-title">🔌 API Integration & Live cURL</div>
-                    <button class="btn-nav" onclick="copyCurl()">📋 Copy cURL</button>
+                    <div class="card-title">API Integration & Live cURL</div>
+                    <button class="btn-nav" onclick="copyCurl()">Copy cURL</button>
                 </div>
                 <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 14px;">
                     Send live HTTP POST requests directly to this server:
@@ -1198,7 +1190,7 @@
     </div>
 
     <script>
-        // Preset Feature Vector Definitions
+        // Preset Feature Vectors
         const PRESETS = {
             legit: {
                 Amount: 42.50,
@@ -1252,7 +1244,7 @@
             }
         }
 
-        // Select Preset (Populate Form WITHOUT auto-running immediately, user can click Analyze)
+        // Select Preset (Form fill only, user clicks Analyze)
         function selectPreset(type) {
             document.querySelectorAll('.btn-preset').forEach(btn => btn.classList.remove('active-preset'));
             const activeBtn = document.getElementById(`presetBtn-${type}`);
@@ -1263,19 +1255,19 @@
 
             if (type === 'legit') {
                 data = PRESETS.legit;
-                hint.textContent = '💡 Loaded Normal Purchase profile ($42.50). Click "Analyze Transaction" to test.';
-                hint.style.color = '#34d399';
+                hint.textContent = 'Loaded Normal Purchase profile ($42.50). Click "Analyze Transaction" to test.';
+                hint.style.color = 'var(--color-success)';
             } else if (type === 'fraud') {
                 data = PRESETS.fraud;
-                hint.textContent = '🚨 Loaded Known Fraud Attack profile ($1,299.00 with high PCA anomaly). Click "Analyze Transaction".';
-                hint.style.color = '#f87171';
+                hint.textContent = 'Loaded Known Fraud Attack profile ($1,299.00 with high PCA anomaly). Click "Analyze Transaction".';
+                hint.style.color = 'var(--color-danger)';
             } else {
                 data.Amount = (Math.random() * 600 + 5).toFixed(2);
                 for (let i = 1; i <= 28; i++) {
                     data[`V${i}`] = (Math.random() * 4 - 2).toFixed(4);
                 }
-                hint.textContent = '🎲 Generated Random Transaction parameters. Click "Analyze Transaction" to inspect risk.';
-                hint.style.color = '#38bdf8';
+                hint.textContent = 'Generated Random Transaction parameters. Click "Analyze Transaction" to inspect risk.';
+                hint.style.color = 'var(--color-info)';
             }
 
             document.getElementById('tx-Amount').value = data.Amount;
@@ -1283,17 +1275,12 @@
                 const el = document.getElementById(`tx-V${i}`);
                 if (el) el.value = parseFloat(data[`V${i}`]).toFixed(4);
             }
-
-            // Highlight predict button to invite click
-            const predictBtn = document.getElementById('predictBtn');
-            predictBtn.style.transform = 'scale(1.02)';
-            setTimeout(() => { predictBtn.style.transform = ''; }, 300);
         }
 
         function onInputChanged() {
             const hint = document.getElementById('presetHint');
-            hint.textContent = '✏️ Custom inputs modified. Click "Analyze Transaction" below to evaluate.';
-            hint.style.color = '#fbbf24';
+            hint.textContent = 'Custom inputs modified. Click "Analyze Transaction" below to evaluate.';
+            hint.style.color = 'var(--color-warning)';
             document.querySelectorAll('.btn-preset').forEach(btn => btn.classList.remove('active-preset'));
         }
 
@@ -1313,7 +1300,7 @@
             const btn = document.getElementById('predictBtn');
             const latencyBadge = document.getElementById('latencyBadge');
             btn.disabled = true;
-            btn.innerHTML = '<span>⏳ Evaluating with LightGBM...</span>';
+            btn.textContent = 'Evaluating with LightGBM...';
 
             const payload = getFormData();
             const startTime = performance.now();
@@ -1333,13 +1320,13 @@
                 renderResult(result.fraud_probability, result.is_fraud);
             } catch (err) {
                 console.error('Prediction failed:', err);
-                latencyBadge.textContent = 'Fallback local';
+                latencyBadge.textContent = 'Local fallback';
                 const isFraud = payload.Amount > 800 || payload.V14 < -3.0;
                 const prob = isFraud ? 0.9412 : 0.0035;
                 renderResult(prob, isFraud);
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '<span>⚡ Analyze Transaction</span>';
+                btn.textContent = 'Analyze Transaction';
             }
         }
 
@@ -1348,8 +1335,8 @@
             const percentage = (prob * 100).toFixed(2);
             document.getElementById('probText').textContent = `${percentage}%`;
 
-            // SVG Circumference = 2 * PI * 90 ≈ 565.48
-            const maxDash = 565.48;
+            // SVG Circumference = 2 * PI * 82 ≈ 515.22
+            const maxDash = 515.22;
             const offset = maxDash - (maxDash * prob);
             const gaugeBar = document.getElementById('gaugeBar');
             const banner = document.getElementById('decisionBanner');
@@ -1360,19 +1347,19 @@
             if (isFraud || prob >= 0.5) {
                 gaugeBar.style.stroke = 'var(--color-danger)';
                 banner.className = 'decision-banner fraud';
-                banner.innerHTML = '<span>🚨 HIGH RISK — FLAGGED AS FRAUD</span>';
+                banner.textContent = 'HIGH RISK — FLAGGED AS FRAUD';
                 riskLevel.textContent = 'CRITICAL RISK';
                 riskLevel.style.color = 'var(--color-danger)';
             } else if (prob >= 0.2) {
                 gaugeBar.style.stroke = 'var(--color-warning)';
                 banner.className = 'decision-banner review';
-                banner.innerHTML = '<span>⚠️ MEDIUM RISK — REVIEW SUGGESTED</span>';
+                banner.textContent = 'MEDIUM RISK — REVIEW SUGGESTED';
                 riskLevel.textContent = 'MODERATE RISK';
                 riskLevel.style.color = 'var(--color-warning)';
             } else {
                 gaugeBar.style.stroke = 'var(--color-success)';
                 banner.className = 'decision-banner legit';
-                banner.innerHTML = '<span>🛡️ APPROVED — NORMAL TRANSACTION</span>';
+                banner.textContent = 'APPROVED — NORMAL TRANSACTION';
                 riskLevel.textContent = 'VERY LOW RISK';
                 riskLevel.style.color = 'var(--color-success)';
             }
@@ -1382,14 +1369,12 @@
         function createRandomTx(isFraudTarget) {
             const tx = {};
             if (isFraudTarget) {
-                // Fraud characteristics: large or anomalous amount, negative V14, negative V12, positive V4
                 tx.Amount = parseFloat((Math.random() * 1800 + 450).toFixed(2));
                 for (let i = 1; i <= 28; i++) {
                     const base = PRESETS.fraud[`V${i}`] || 0;
                     tx[`V${i}`] = parseFloat((base + (Math.random() * 0.8 - 0.4)).toFixed(4));
                 }
             } else {
-                // Normal characteristics
                 tx.Amount = parseFloat((Math.random() * 120 + 8.5).toFixed(2));
                 for (let i = 1; i <= 28; i++) {
                     const base = PRESETS.legit[`V${i}`] || 0;
@@ -1405,7 +1390,7 @@
             const pattern = document.getElementById('batchPatternSelect').value;
             const tableBody = document.getElementById('batchTableBody');
             
-            tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--accent-primary); padding: 30px;">⏳ Generating & scoring ${size} dynamic transactions in stream...</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--accent-primary); padding: 24px;">Generating & scoring ${size} dynamic transactions in stream...</td></tr>`;
 
             const batchList = [];
             const metaList = [];
@@ -1417,7 +1402,6 @@
                 } else if (pattern === 'normal_only') {
                     isFraudTarget = false;
                 } else {
-                    // mixed: ~20-30% fraud in demo sample
                     isFraudTarget = (i === 1 || i === 3) ? true : (Math.random() < 0.2);
                 }
 
@@ -1431,8 +1415,7 @@
 
                 metaList.push({
                     id: `#TX-${randomId}`,
-                    time: timeStr,
-                    isFraudTarget: isFraudTarget
+                    time: timeStr
                 });
             }
 
@@ -1449,7 +1432,6 @@
                 const data = await res.json();
                 const latency = Math.round(performance.now() - startTime);
 
-                // Update summary stats
                 const totalVol = batchList.reduce((acc, cur) => acc + cur.Amount, 0);
                 const fraudCount = data.fraud_count;
                 const legitCount = data.count - fraudCount;
@@ -1460,7 +1442,6 @@
                 document.getElementById('stat-volume').textContent = `$${totalVol.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                 document.getElementById('stat-latency').textContent = `${latency}ms`;
 
-                // Render Table rows
                 tableBody.innerHTML = '';
                 data.predictions.forEach((p, idx) => {
                     const row = document.createElement('tr');
@@ -1470,20 +1451,20 @@
                     const meta = metaList[idx];
 
                     row.innerHTML = `
-                        <td><code style="color: #ffffff; font-weight: 700;">${meta.id}</code></td>
+                        <td><strong style="color: var(--text-primary);">${meta.id}</strong></td>
                         <td style="color: var(--text-muted); font-size: 11px;">${meta.time}</td>
                         <td><strong>$${tx.Amount.toFixed(2)}</strong></td>
                         <td><span style="color: var(--text-muted); font-size: 11px;">V14: ${tx.V14.toFixed(2)} | V12: ${tx.V12.toFixed(2)} | V4: ${tx.V4.toFixed(2)}</span></td>
                         <td>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <span>${probPct}%</span>
-                                <div style="flex: 1; max-width: 60px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                                <div style="flex: 1; max-width: 60px; height: 6px; background: #e2e8f0; border-radius: 4px; overflow: hidden;">
                                     <div style="width: ${probPct}%; height: 100%; background: ${isF ? 'var(--color-danger)' : 'var(--color-success)'};"></div>
                                 </div>
                             </div>
                         </td>
-                        <td><span style="color: ${isF ? 'var(--color-danger)' : 'var(--color-success)'}; font-weight: 700;">${isF ? '🚨 FRAUD' : '🟢 LEGIT'}</span></td>
-                        <td><span class="pipeline-tag" style="background: ${isF ? 'var(--color-danger-bg)' : 'var(--color-success-bg)'}; color: ${isF ? '#f87171' : '#34d399'}; font-weight: 700;">${isF ? 'BLOCKED' : 'APPROVED'}</span></td>
+                        <td><span style="color: ${isF ? 'var(--color-danger)' : 'var(--color-success)'}; font-weight: 700;">${isF ? 'FRAUD' : 'LEGIT'}</span></td>
+                        <td><span class="status-badge-table ${isF ? 'block' : 'pass'}">${isF ? 'BLOCKED' : 'APPROVED'}</span></td>
                     `;
                     tableBody.appendChild(row);
                 });
