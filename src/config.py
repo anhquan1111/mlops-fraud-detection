@@ -75,6 +75,94 @@ LR_PARAMS: dict = {
 }
 
 # ---------------------------------------------------------------------------
+# XGBoost base hyperparameters
+# ---------------------------------------------------------------------------
+# scale_pos_weight = n_negative / n_positive — computed dynamically in train.py
+
+XGBOOST_BASE_PARAMS: dict = {
+    "eval_metric": "aucpr",  # optimize for PR-AUC
+    "random_state": RANDOM_STATE,
+    "n_jobs": -1,
+    "tree_method": "hist",  # faster than exact
+    "early_stopping_rounds": 20,  # stop if no improvement for 20 rounds
+}
+
+# Experiment grid: list of param dicts (merged with base)
+XGBOOST_GRID: list[dict] = [
+    {
+        "n_estimators": 100,
+        "max_depth": 6,
+        "learning_rate": 0.1,
+        "subsample": 1.0,
+        "colsample_bytree": 1.0,
+        "run_name": "xgb_default",
+    },
+    {
+        "n_estimators": 200,
+        "max_depth": 8,
+        "learning_rate": 0.05,
+        "subsample": 1.0,
+        "colsample_bytree": 0.8,
+        "run_name": "xgb_deep",
+    },
+    {
+        "n_estimators": 300,
+        "max_depth": 6,
+        "learning_rate": 0.05,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "run_name": "xgb_regularized",
+    },
+]
+
+# ---------------------------------------------------------------------------
+# LightGBM base hyperparameters
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# scale_pos_weight for LGBM is same formula: n_negative / n_positive
+
+LIGHTGBM_BASE_PARAMS: dict = {
+    "metric": "average_precision",  # PR-AUC equivalent in LGBM
+    "random_state": RANDOM_STATE,
+    "n_jobs": -1,
+    "verbose": -1,  # suppress LGBM output
+}
+
+# Experiment grid: list of param dicts (merged with base)
+LIGHTGBM_GRID: list[dict] = [
+    {
+        "n_estimators": 100,
+        "max_depth": 6,
+        "learning_rate": 0.1,
+        "num_leaves": 31,
+        "subsample": 1.0,
+        "run_name": "lgbm_default",
+    },
+    {
+        "n_estimators": 200,
+        "max_depth": -1,  # -1 = no limit (LGBM default)
+        "learning_rate": 0.05,
+        "num_leaves": 63,
+        "subsample": 1.0,
+        "run_name": "lgbm_large",
+    },
+    {
+        "n_estimators": 300,
+        "max_depth": -1,
+        "learning_rate": 0.05,
+        "num_leaves": 31,
+        "subsample": 0.8,
+        "run_name": "lgbm_regularized",
+    },
+]
+
+# ---------------------------------------------------------------------------
+# MLflow Model Registry
+# ---------------------------------------------------------------------------
+
+REGISTERED_MODEL_NAME: str = "fraud-detection-model"
+
+# ---------------------------------------------------------------------------
 # Success thresholds (from AGENTS.md)
 # ---------------------------------------------------------------------------
 
