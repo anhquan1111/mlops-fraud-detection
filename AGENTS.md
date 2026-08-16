@@ -169,7 +169,7 @@ Project này được chia thành **6 sessions** để tối ưu token và giữ
 | 2 | ✅ DONE | Data + EDA + Baseline Model + MLflow | `src/config.py`, `src/features.py`, `src/train.py`, `src/evaluate.py`, `notebooks/01_eda.py`, baseline LR tracked in MLflow (PR-AUC=0.7156, Recall=0.9184) |
 | 3 | ✅ DONE | FastAPI Serving + Deploy khung | `src/api.py`, `Dockerfile`, `render.yaml`, `scripts/export_model.py`, `scripts/register_model.py`, 18 tests passed, model bundled via HF Hub strategy |
 | 4 | ✅ DONE | XGBoost/LightGBM + Tuning + MLflow Registry | `src/config.py` (XGB/LGBM params), `src/train.py` (7-run experiment grid), `scripts/select_best_model.py`, 7 MLflow runs, best model registered: `fraud-detection-model@production` (lgbm_large: PR-AUC=0.8770, Recall=0.8571, Precision=0.8485) |
-| 5 | ⬜ TODO | Validation Gate + Testing + CI/CD | `src/validate.py`, `tests/`, `.github/workflows/`, pytest + ruff + pipeline smoke test |
+| 5 | ✅ DONE | Validation Gate + Testing + CI/CD | `src/validate.py`, `tests/test_features.py` (16 tests), `tests/test_evaluate.py` (14 tests), `tests/test_validate.py` (11 tests), `.github/workflows/ci.yml`, 61 tests passed, ruff clean |
 | 6 | ⬜ TODO | Final Deploy + README + Model Card | `README.md`, `docs/model_card.md`, deploy bản cuối, polish |
 
 ### Bootstrap Prompt cho mỗi session mới
