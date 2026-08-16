@@ -7,6 +7,10 @@
 
 FROM python:3.12-slim
 
+# LightGBM requires libgomp (OpenMP) — not included in slim image
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install uv (fast Python package manager)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
