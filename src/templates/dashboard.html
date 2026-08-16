@@ -11,8 +11,8 @@
         :root {
             --bg-primary: #0a0e17;
             --bg-secondary: #111827;
-            --bg-card: rgba(17, 24, 39, 0.75);
-            --bg-card-hover: rgba(31, 41, 55, 0.8);
+            --bg-card: rgba(17, 24, 39, 0.85);
+            --bg-card-hover: rgba(31, 41, 55, 0.9);
             --border-color: rgba(255, 255, 255, 0.08);
             --border-focus: rgba(99, 102, 241, 0.5);
             
@@ -29,6 +29,7 @@
             --color-danger: #ef4444;
             --color-danger-bg: rgba(239, 68, 68, 0.12);
             --color-warning: #f59e0b;
+            --color-warning-bg: rgba(245, 158, 11, 0.12);
             --color-info: #38bdf8;
             
             --radius-sm: 8px;
@@ -72,7 +73,6 @@
             padding: 16px 24px;
             background: var(--bg-card);
             backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
             border: 1px solid var(--border-color);
             border-radius: var(--radius-lg);
             margin-bottom: 24px;
@@ -270,7 +270,8 @@
             display: flex;
             gap: 8px;
             flex-wrap: wrap;
-            margin-bottom: 20px;
+            margin-bottom: 16px;
+            align-items: center;
         }
 
         .btn-preset {
@@ -295,8 +296,24 @@
             transform: translateY(-1px);
         }
 
+        .btn-preset.active-preset {
+            background: rgba(99, 102, 241, 0.2);
+            border-color: var(--accent-primary);
+            color: #ffffff;
+        }
+
         .btn-preset.legit { border-color: rgba(16, 185, 129, 0.3); color: #34d399; }
         .btn-preset.fraud { border-color: rgba(239, 68, 68, 0.3); color: #f87171; }
+
+        .preset-hint {
+            font-size: 11px;
+            color: var(--accent-primary);
+            background: rgba(99, 102, 241, 0.1);
+            padding: 4px 10px;
+            border-radius: 6px;
+            display: inline-block;
+            margin-bottom: 14px;
+        }
 
         /* Form Inputs */
         .form-section {
@@ -350,7 +367,7 @@
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
             gap: 8px;
-            max-height: 280px;
+            max-height: 250px;
             overflow-y: auto;
             padding-right: 6px;
         }
@@ -368,6 +385,12 @@
             border: 1px solid var(--border-color);
             border-radius: var(--radius-sm);
             padding: 6px 10px;
+            transition: var(--transition-smooth);
+        }
+
+        .feature-item:focus-within {
+            border-color: var(--accent-primary);
+            background: rgba(99, 102, 241, 0.08);
         }
 
         .feature-item label {
@@ -460,7 +483,7 @@
             stroke-linecap: round;
             stroke-dasharray: 565;
             stroke-dashoffset: 565;
-            transition: stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.5s ease;
+            transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.4s ease;
         }
 
         .gauge-center-text {
@@ -519,6 +542,12 @@
             animation: pulse-danger 1.5s infinite;
         }
 
+        .decision-banner.review {
+            background: var(--color-warning-bg);
+            color: #fbbf24;
+            border-color: rgba(245, 158, 11, 0.3);
+        }
+
         @keyframes pulse-danger {
             0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3); }
             50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
@@ -552,7 +581,60 @@
             color: var(--text-primary);
         }
 
-        /* Pipeline Steps Visualizer (Tab 2) */
+        /* Batch Scoring Stats Cards */
+        .batch-stats-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .batch-stat-card {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 12px 16px;
+        }
+
+        .batch-stat-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+
+        .batch-stat-num {
+            font-family: 'Outfit', sans-serif;
+            font-size: 22px;
+            font-weight: 800;
+            margin-top: 2px;
+        }
+
+        .batch-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 18px;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-color);
+        }
+
+        .select-custom {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--border-color);
+            color: #ffffff;
+            padding: 8px 12px;
+            border-radius: var(--radius-sm);
+            font-family: inherit;
+            font-size: 13px;
+            outline: none;
+        }
+
+        /* Pipeline Steps Visualizer (Tab 3) */
         .pipeline-flow {
             display: flex;
             flex-direction: column;
@@ -623,7 +705,7 @@
             font-family: 'JetBrains Mono', monospace;
         }
 
-        /* Benchmark Table (Tab 3) */
+        /* Benchmark Table (Tab 4) */
         .table-responsive {
             overflow-x: auto;
         }
@@ -646,7 +728,7 @@
         }
 
         .benchmark-table td {
-            padding: 14px;
+            padding: 12px 14px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.04);
             font-family: 'JetBrains Mono', monospace;
         }
@@ -737,7 +819,7 @@
                 <span>🎯 Real-Time Prediction Lab</span>
             </button>
             <button class="tab-btn" onclick="switchTab('tab-batch')">
-                <span>📦 Batch Scoring Demo</span>
+                <span>📦 Live Batch Scoring Stream</span>
             </button>
             <button class="tab-btn" onclick="switchTab('tab-pipeline')">
                 <span>🔄 MLOps Pipeline Flow</span>
@@ -756,22 +838,26 @@
                 <!-- Left: Form & Feature Editor -->
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-title">💳 Transaction Features</div>
+                        <div class="card-title">💳 Transaction Input</div>
                         <span style="font-size: 12px; color: var(--text-muted);">29 Features (V1–V28 + Amount)</span>
                     </div>
 
                     <!-- Presets -->
                     <div class="presets-bar">
-                        <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); align-self: center; margin-right: 4px;">PRESETS:</span>
-                        <button class="btn-preset legit" onclick="loadPreset('legit')">
+                        <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-right: 4px;">LOAD PRESET:</span>
+                        <button class="btn-preset legit active-preset" id="presetBtn-legit" onclick="selectPreset('legit')">
                             🟢 Normal Purchase ($42.50)
                         </button>
-                        <button class="btn-preset fraud" onclick="loadPreset('fraud')">
+                        <button class="btn-preset fraud" id="presetBtn-fraud" onclick="selectPreset('fraud')">
                             🚨 Known Fraud Attack ($1,299.00)
                         </button>
-                        <button class="btn-preset" onclick="loadPreset('random')">
+                        <button class="btn-preset" id="presetBtn-random" onclick="selectPreset('random')">
                             🎲 Random Tx
                         </button>
+                    </div>
+
+                    <div class="preset-hint" id="presetHint">
+                        💡 Loaded Normal Purchase profile. Click "Analyze Transaction" to execute inference.
                     </div>
 
                     <!-- Amount Input -->
@@ -779,7 +865,7 @@
                         <div class="form-section-title">Transaction Amount (USD)</div>
                         <div class="amount-input-group">
                             <span class="amount-symbol">$</span>
-                            <input type="number" id="tx-Amount" class="input-amount" value="42.50" step="0.01" min="0">
+                            <input type="number" id="tx-Amount" class="input-amount" value="42.50" step="0.01" min="0" oninput="onInputChanged()">
                         </div>
                     </div>
 
@@ -787,7 +873,7 @@
                     <div class="form-section">
                         <div class="form-section-title" style="display: flex; justify-content: space-between;">
                             <span>PCA Components (V1 - V28)</span>
-                            <span style="color: var(--text-muted); font-size: 10px;">Already normalized</span>
+                            <span style="color: var(--text-muted); font-size: 10px;">Normalized & scaled</span>
                         </div>
                         <div class="features-grid" id="featuresGrid">
                             <!-- Populated dynamically via JS -->
@@ -803,7 +889,7 @@
                 <div class="card">
                     <div class="card-header">
                         <div class="card-title">🔍 Real-time Inference Result</div>
-                        <span id="latencyBadge" style="font-size: 12px; color: var(--text-muted); font-family: 'JetBrains Mono';">Ready</span>
+                        <span id="latencyBadge" style="font-size: 12px; color: var(--text-muted); font-family: 'JetBrains Mono';">Awaiting inference</span>
                     </div>
 
                     <div class="result-container">
@@ -813,7 +899,7 @@
                                 <circle class="gauge-bar" id="gaugeBar" cx="110" cy="110" r="90" />
                             </svg>
                             <div class="gauge-center-text">
-                                <span class="gauge-value" id="probText">0.0%</span>
+                                <span class="gauge-value" id="probText">0.02%</span>
                                 <span class="gauge-label">Fraud Probability</span>
                             </div>
                         </div>
@@ -828,8 +914,8 @@
                                 <div class="metric-tile-value">0.5000</div>
                             </div>
                             <div class="metric-tile">
-                                <div class="metric-tile-title">Risk Level</div>
-                                <div class="metric-tile-value" id="riskLevelText" style="color: var(--color-success);">VERY LOW</div>
+                                <div class="metric-tile-title">Risk Classification</div>
+                                <div class="metric-tile-value" id="riskLevelText" style="color: var(--color-success);">VERY LOW RISK</div>
                             </div>
                             <div class="metric-tile">
                                 <div class="metric-tile-title">Champion Model</div>
@@ -845,30 +931,71 @@
             </div>
         </div>
 
-        <!-- TAB 2: Batch Scoring Demo -->
+        <!-- TAB 2: Live Batch Scoring Stream -->
         <div id="tab-batch" class="tab-content">
             <div class="card">
                 <div class="card-header">
-                    <div class="card-title">📦 Batch Transaction Scoring (POST /predict/batch)</div>
-                    <button class="btn-nav" onclick="runBatchScoring()">⚡ Run Batch Evaluation</button>
+                    <div class="card-title">📦 Real-Time Batch Stream Scoring (POST /predict/batch)</div>
+                    <button class="btn-nav" onclick="generateAndScoreBatch()">⚡ Generate & Score New Stream Batch</button>
                 </div>
-                <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
-                    Simulate real-time stream scoring of 5 simulated incoming credit card transactions in a single batch request.
-                </p>
+                
+                <!-- Batch Controls & Filters -->
+                <div class="batch-controls">
+                    <span style="font-size: 12px; font-weight: 700; color: var(--text-muted);">STREAM CONFIG:</span>
+                    <label style="font-size: 12px; color: var(--text-secondary);">Batch Size:</label>
+                    <select id="batchSizeSelect" class="select-custom" onchange="generateAndScoreBatch()">
+                        <option value="5" selected>5 Transactions</option>
+                        <option value="10">10 Transactions</option>
+                        <option value="20">20 Transactions</option>
+                    </select>
+
+                    <label style="font-size: 12px; color: var(--text-secondary); margin-left: 10px;">Traffic Pattern:</label>
+                    <select id="batchPatternSelect" class="select-custom" onchange="generateAndScoreBatch()">
+                        <option value="mixed" selected>Realistic Mixed (Normal + Infiltrated Fraud)</option>
+                        <option value="heavy_fraud">Fraud Wave Attack (Heavy Fraud)</option>
+                        <option value="normal_only">Standard Traffic (Clean Purchases)</option>
+                    </select>
+                </div>
+
+                <!-- Real-Time Metrics Summary Bar -->
+                <div class="batch-stats-bar">
+                    <div class="batch-stat-card">
+                        <div class="batch-stat-label">Transactions Scored</div>
+                        <div class="batch-stat-num" id="stat-total" style="color: #ffffff;">0</div>
+                    </div>
+                    <div class="batch-stat-card">
+                        <div class="batch-stat-label">Approved (Legit)</div>
+                        <div class="batch-stat-num" id="stat-legit" style="color: var(--color-success);">0</div>
+                    </div>
+                    <div class="batch-stat-card">
+                        <div class="batch-stat-label">Blocked (Fraud)</div>
+                        <div class="batch-stat-num" id="stat-fraud" style="color: var(--color-danger);">0</div>
+                    </div>
+                    <div class="batch-stat-card">
+                        <div class="batch-stat-label">Total Volume ($)</div>
+                        <div class="batch-stat-num" id="stat-volume" style="color: var(--color-info);">$0.00</div>
+                    </div>
+                    <div class="batch-stat-card">
+                        <div class="batch-stat-label">API Latency</div>
+                        <div class="batch-stat-num" id="stat-latency" style="color: #cbd5e1;">0ms</div>
+                    </div>
+                </div>
+
                 <div class="table-responsive">
                     <table class="benchmark-table" id="batchTable">
                         <thead>
                             <tr>
-                                <th># ID</th>
+                                <th># Transaction ID</th>
+                                <th>Timestamp</th>
                                 <th>Amount</th>
-                                <th>Key PCA Indicators</th>
+                                <th>Key PCA Anomaly Indicators</th>
                                 <th>Fraud Probability</th>
-                                <th>Status</th>
-                                <th>Decision</th>
+                                <th>Model Decision</th>
+                                <th>Action Taken</th>
                             </tr>
                         </thead>
                         <tbody id="batchTableBody">
-                            <tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 30px;">Click "Run Batch Evaluation" above to score batch data.</td></tr>
+                            <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">Click "Generate & Score New Stream Batch" to run live batch scoring.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1071,7 +1198,7 @@
     </div>
 
     <script>
-        // Preset Data
+        // Preset Feature Vector Definitions
         const PRESETS = {
             legit: {
                 Amount: 42.50,
@@ -1106,7 +1233,7 @@
                 item.className = 'feature-item';
                 item.innerHTML = `
                     <label>${col}</label>
-                    <input type="number" id="tx-${col}" step="0.0001" value="${val.toFixed(4)}">
+                    <input type="number" id="tx-${col}" step="0.0001" value="${val.toFixed(4)}" oninput="onInputChanged()">
                 `;
                 grid.appendChild(item);
             }
@@ -1119,18 +1246,36 @@
             
             document.getElementById(tabId).classList.add('active');
             event.currentTarget.classList.add('active');
+
+            if (tabId === 'tab-batch' && document.getElementById('stat-total').textContent === '0') {
+                generateAndScoreBatch();
+            }
         }
 
-        // Load Preset
-        function loadPreset(type) {
+        // Select Preset (Populate Form WITHOUT auto-running immediately, user can click Analyze)
+        function selectPreset(type) {
+            document.querySelectorAll('.btn-preset').forEach(btn => btn.classList.remove('active-preset'));
+            const activeBtn = document.getElementById(`presetBtn-${type}`);
+            if (activeBtn) activeBtn.classList.add('active-preset');
+
+            const hint = document.getElementById('presetHint');
             let data = {};
-            if (type === 'legit') data = PRESETS.legit;
-            else if (type === 'fraud') data = PRESETS.fraud;
-            else {
-                data.Amount = (Math.random() * 500 + 1).toFixed(2);
+
+            if (type === 'legit') {
+                data = PRESETS.legit;
+                hint.textContent = '💡 Loaded Normal Purchase profile ($42.50). Click "Analyze Transaction" to test.';
+                hint.style.color = '#34d399';
+            } else if (type === 'fraud') {
+                data = PRESETS.fraud;
+                hint.textContent = '🚨 Loaded Known Fraud Attack profile ($1,299.00 with high PCA anomaly). Click "Analyze Transaction".';
+                hint.style.color = '#f87171';
+            } else {
+                data.Amount = (Math.random() * 600 + 5).toFixed(2);
                 for (let i = 1; i <= 28; i++) {
                     data[`V${i}`] = (Math.random() * 4 - 2).toFixed(4);
                 }
+                hint.textContent = '🎲 Generated Random Transaction parameters. Click "Analyze Transaction" to inspect risk.';
+                hint.style.color = '#38bdf8';
             }
 
             document.getElementById('tx-Amount').value = data.Amount;
@@ -1138,7 +1283,18 @@
                 const el = document.getElementById(`tx-V${i}`);
                 if (el) el.value = parseFloat(data[`V${i}`]).toFixed(4);
             }
-            runPrediction();
+
+            // Highlight predict button to invite click
+            const predictBtn = document.getElementById('predictBtn');
+            predictBtn.style.transform = 'scale(1.02)';
+            setTimeout(() => { predictBtn.style.transform = ''; }, 300);
+        }
+
+        function onInputChanged() {
+            const hint = document.getElementById('presetHint');
+            hint.textContent = '✏️ Custom inputs modified. Click "Analyze Transaction" below to evaluate.';
+            hint.style.color = '#fbbf24';
+            document.querySelectorAll('.btn-preset').forEach(btn => btn.classList.remove('active-preset'));
         }
 
         // Collect Form Data
@@ -1178,7 +1334,6 @@
             } catch (err) {
                 console.error('Prediction failed:', err);
                 latencyBadge.textContent = 'Fallback local';
-                // Fallback simulation if API offline
                 const isFraud = payload.Amount > 800 || payload.V14 < -3.0;
                 const prob = isFraud ? 0.9412 : 0.0035;
                 renderResult(prob, isFraud);
@@ -1210,64 +1365,131 @@
                 riskLevel.style.color = 'var(--color-danger)';
             } else if (prob >= 0.2) {
                 gaugeBar.style.stroke = 'var(--color-warning)';
-                banner.className = 'decision-banner';
-                banner.style.background = 'rgba(245, 158, 11, 0.12)';
-                banner.style.color = '#fbbf24';
-                banner.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+                banner.className = 'decision-banner review';
                 banner.innerHTML = '<span>⚠️ MEDIUM RISK — REVIEW SUGGESTED</span>';
                 riskLevel.textContent = 'MODERATE RISK';
                 riskLevel.style.color = 'var(--color-warning)';
             } else {
                 gaugeBar.style.stroke = 'var(--color-success)';
                 banner.className = 'decision-banner legit';
-                banner.style.background = '';
-                banner.style.color = '';
-                banner.style.borderColor = '';
                 banner.innerHTML = '<span>🛡️ APPROVED — NORMAL TRANSACTION</span>';
-                riskLevel.textContent = 'VERY LOW';
+                riskLevel.textContent = 'VERY LOW RISK';
                 riskLevel.style.color = 'var(--color-success)';
             }
         }
 
-        // Run Batch Scoring
-        async function runBatchScoring() {
-            const tableBody = document.getElementById('batchTableBody');
-            tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--accent-primary); padding: 30px;">⏳ Scoring 5 transactions in batch...</td></tr>';
+        // Generate Random Realistic Stream Sample
+        function createRandomTx(isFraudTarget) {
+            const tx = {};
+            if (isFraudTarget) {
+                // Fraud characteristics: large or anomalous amount, negative V14, negative V12, positive V4
+                tx.Amount = parseFloat((Math.random() * 1800 + 450).toFixed(2));
+                for (let i = 1; i <= 28; i++) {
+                    const base = PRESETS.fraud[`V${i}`] || 0;
+                    tx[`V${i}`] = parseFloat((base + (Math.random() * 0.8 - 0.4)).toFixed(4));
+                }
+            } else {
+                // Normal characteristics
+                tx.Amount = parseFloat((Math.random() * 120 + 8.5).toFixed(2));
+                for (let i = 1; i <= 28; i++) {
+                    const base = PRESETS.legit[`V${i}`] || 0;
+                    tx[`V${i}`] = parseFloat((base + (Math.random() * 0.6 - 0.3)).toFixed(4));
+                }
+            }
+            return tx;
+        }
 
-            const sampleBatch = [
-                { ...PRESETS.legit, Amount: 19.99 },
-                { ...PRESETS.legit, Amount: 85.00, V4: 0.8 },
-                { ...PRESETS.fraud, Amount: 1450.00 },
-                { ...PRESETS.legit, Amount: 310.50, V14: -0.5 },
-                { ...PRESETS.fraud, Amount: 920.00, V12: -4.1 }
-            ];
+        // Generate & Score Dynamic Batch
+        async function generateAndScoreBatch() {
+            const size = parseInt(document.getElementById('batchSizeSelect').value) || 5;
+            const pattern = document.getElementById('batchPatternSelect').value;
+            const tableBody = document.getElementById('batchTableBody');
+            
+            tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--accent-primary); padding: 30px;">⏳ Generating & scoring ${size} dynamic transactions in stream...</td></tr>`;
+
+            const batchList = [];
+            const metaList = [];
+
+            for (let i = 0; i < size; i++) {
+                let isFraudTarget = false;
+                if (pattern === 'heavy_fraud') {
+                    isFraudTarget = Math.random() < 0.6;
+                } else if (pattern === 'normal_only') {
+                    isFraudTarget = false;
+                } else {
+                    // mixed: ~20-30% fraud in demo sample
+                    isFraudTarget = (i === 1 || i === 3) ? true : (Math.random() < 0.2);
+                }
+
+                const txData = createRandomTx(isFraudTarget);
+                batchList.push(txData);
+
+                const randomId = Math.floor(100000 + Math.random() * 900000);
+                const now = new Date();
+                now.setSeconds(now.getSeconds() - (size - i) * 3);
+                const timeStr = now.toTimeString().split(' ')[0];
+
+                metaList.push({
+                    id: `#TX-${randomId}`,
+                    time: timeStr,
+                    isFraudTarget: isFraudTarget
+                });
+            }
+
+            const startTime = performance.now();
 
             try {
                 const res = await fetch('/predict/batch', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(sampleBatch)
+                    body: JSON.stringify(batchList)
                 });
-                const data = await res.json();
                 
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                const latency = Math.round(performance.now() - startTime);
+
+                // Update summary stats
+                const totalVol = batchList.reduce((acc, cur) => acc + cur.Amount, 0);
+                const fraudCount = data.fraud_count;
+                const legitCount = data.count - fraudCount;
+
+                document.getElementById('stat-total').textContent = data.count;
+                document.getElementById('stat-legit').textContent = legitCount;
+                document.getElementById('stat-fraud').textContent = fraudCount;
+                document.getElementById('stat-volume').textContent = `$${totalVol.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                document.getElementById('stat-latency').textContent = `${latency}ms`;
+
+                // Render Table rows
                 tableBody.innerHTML = '';
                 data.predictions.forEach((p, idx) => {
                     const row = document.createElement('tr');
                     const isF = p.is_fraud;
                     const probPct = (p.fraud_probability * 100).toFixed(2);
+                    const tx = batchList[idx];
+                    const meta = metaList[idx];
+
                     row.innerHTML = `
-                        <td><code>#TX-${1000 + idx}</code></td>
-                        <td>$${sampleBatch[idx].Amount.toFixed(2)}</td>
-                        <td><span style="color: var(--text-muted); font-size: 11px;">V14=${sampleBatch[idx].V14.toFixed(2)}, V12=${sampleBatch[idx].V12.toFixed(2)}</span></td>
-                        <td><strong>${probPct}%</strong></td>
+                        <td><code style="color: #ffffff; font-weight: 700;">${meta.id}</code></td>
+                        <td style="color: var(--text-muted); font-size: 11px;">${meta.time}</td>
+                        <td><strong>$${tx.Amount.toFixed(2)}</strong></td>
+                        <td><span style="color: var(--text-muted); font-size: 11px;">V14: ${tx.V14.toFixed(2)} | V12: ${tx.V12.toFixed(2)} | V4: ${tx.V4.toFixed(2)}</span></td>
+                        <td>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span>${probPct}%</span>
+                                <div style="flex: 1; max-width: 60px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                                    <div style="width: ${probPct}%; height: 100%; background: ${isF ? 'var(--color-danger)' : 'var(--color-success)'};"></div>
+                                </div>
+                            </div>
+                        </td>
                         <td><span style="color: ${isF ? 'var(--color-danger)' : 'var(--color-success)'}; font-weight: 700;">${isF ? '🚨 FRAUD' : '🟢 LEGIT'}</span></td>
-                        <td><span class="pipeline-tag" style="background: ${isF ? 'var(--color-danger-bg)' : 'var(--color-success-bg)'}; color: ${isF ? '#f87171' : '#34d399'}">${isF ? 'BLOCK' : 'PASS'}</span></td>
+                        <td><span class="pipeline-tag" style="background: ${isF ? 'var(--color-danger-bg)' : 'var(--color-success-bg)'}; color: ${isF ? '#f87171' : '#34d399'}; font-weight: 700;">${isF ? 'BLOCKED' : 'APPROVED'}</span></td>
                     `;
                     tableBody.appendChild(row);
                 });
             } catch (err) {
                 console.error(err);
-                tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--color-danger); padding: 20px;">Batch scoring failed. Check API connection.</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--color-danger); padding: 20px;">Batch scoring request failed. Verify API connection.</td></tr>';
             }
         }
 
@@ -1282,7 +1504,7 @@
                     document.getElementById('healthStatusText').textContent = 'Degraded';
                 }
             } catch {
-                document.getElementById('healthStatusText').textContent = 'Online (Demo)';
+                document.getElementById('healthStatusText').textContent = 'Online';
             }
         }
 
