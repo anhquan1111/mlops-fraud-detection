@@ -33,6 +33,45 @@ MODEL_ALIAS = "production"
 LOCAL_MODEL_PATH = Path("models/fraud_model.pkl")
 
 
+def _load_any_flavor(model_uri: str):
+    """Load MLflow model using the correct flavor (sklearn / lightgbm / xgboost).
+
+    Tries each flavor in order until one succeeds. This is needed because the
+    registered production model may be LightGBM, XGBoost, or sklearn depending
+    on which experiment run performed best.
+
+    Args:
+        model_uri: MLflow model URI, e.g. 'models:/fraud-detection-model@production'.
+
+    Returns:
+        Loaded model object supporting predict_proba().
+
+    Raises:
+        RuntimeError: If no supported flavor is found.
+    """
+    import mlflow.lightgbm
+    import mlflow.sklearn
+    import mlflow.xgboost
+
+    loaders = [
+        ("sklearn", mlflow.sklearn.load_model),
+        ("lightgbm", mlflow.lightgbm.load_model),
+        ("xgboost", mlflow.xgboost.load_model),
+    ]
+    last_exc: Exception | None = None
+    for flavor_name, loader in loaders:
+        try:
+            model = loader(model_uri)
+            logger.info(f"✅ Loaded as '{flavor_name}' flavor.")
+            return model
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"Flavor '{flavor_name}' not available: {exc}")
+            last_exc = exc
+    raise RuntimeError(
+        f"Cannot load model '{model_uri}' — no supported flavor found."
+    ) from last_exc
+
+
 def export_model(upload: bool = False) -> Path:
     """Load production model from MLflow Registry and save as pickle.
 
@@ -57,10 +96,10 @@ def export_model(upload: bool = False) -> Path:
         f"(run_id={model_version.run_id})"
     )
 
-    # Load the sklearn model object
+    # Load the model — auto-detect flavor (sklearn / lightgbm / xgboost)
     model_uri = f"models:/{REGISTERED_MODEL_NAME}@{MODEL_ALIAS}"
     logger.info(f"Loading model from {model_uri} ...")
-    model = mlflow.sklearn.load_model(model_uri)
+    model = _load_any_flavor(model_uri)
 
     # Save to pickle
     joblib.dump(model, LOCAL_MODEL_PATH)
