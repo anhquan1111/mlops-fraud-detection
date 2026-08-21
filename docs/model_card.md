@@ -280,9 +280,23 @@ JSON response: { fraud_probability, is_fraud, threshold, model_name }
 
 ### Performance
 
-- **Inference latency**: < 5ms per transaction (single prediction, local)
-- **Batch**: up to 100 transactions per `/predict/batch` call
-- **Throughput**: Single uvicorn worker handles ~200 req/s (single-core)
+Measured in-process against the registered champion via `TestClient` (300 iterations after
+warm-up, request handling + preprocessing + inference; excludes network transit):
+
+| Endpoint | Median | p95 | Per transaction |
+|----------|--------|-----|-----------------|
+| `POST /predict` (1 tx) | **2.04 ms** | 2.79 ms | 2.04 ms |
+| `POST /predict/batch` (10 tx) | 2.53 ms | 3.51 ms | 0.253 ms |
+| `POST /predict/batch` (100 tx) | 6.86 ms | 8.88 ms | **0.069 ms** |
+
+Batching is worth using: 100 transactions cost 6.86 ms in one call versus ~204 ms as 100 separate
+calls, because `predict_proba` is invoked once for the whole frame rather than once per row. The
+per-request fixed cost — HTTP handling, Pydantic validation, DataFrame construction — dominates
+single-transaction latency, not the model itself.
+
+- **Batch cap**: 100 transactions per `/predict/batch` call (returns 422 above that)
+- **Deployment**: single uvicorn worker on Render free tier; expect a cold start on first request
+  after idle, since the model is downloaded from Hugging Face Hub at startup
 
 ---
 
