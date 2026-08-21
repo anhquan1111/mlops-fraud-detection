@@ -117,44 +117,71 @@ jobs:
           MLFLOW_TRACKING_URI: sqlite:///ci_mlflow.db
           SMOKE_TEST: "1"
         run: |
-          uv run python -c "
-          import logging, os
+          uv run python - <<'SMOKE'
+          import logging
           logging.basicConfig(level=logging.WARNING)
 
-          # Verify data loading + preprocessing pipeline works end-to-end
-          from src.features import load_data, preprocess, split_data
-          from src.evaluate import evaluate_model
-          from src.config import RAW_DATA_PATH
           from sklearn.linear_model import LogisticRegression
 
+          from src.config import RAW_DATA_PATH
+          from src.evaluate import evaluate_model
+          from src.features import (
+              apply_amount_scaler,
+              fit_amount_scaler,
+              load_data,
+              preprocess,
+              split_data,
+          )
+
+          # End-to-end, in the leak-free order: split BEFORE any fitted transform.
           df = load_data(RAW_DATA_PATH)
           X, y = preprocess(df)
-          X_train, X_test, y_train, y_test = split_data(X, y)
+          X_train, X_val, X_test, y_train, y_val, y_test = split_data(X, y)
 
-          model = LogisticRegression(class_weight='balanced', max_iter=200, random_state=42)
+          # preprocess() must not have scaled anything yet.
+          assert (X["Amount"] == df["Amount"]).all(), "preprocess() scaled Amount -- leak!"
+
+          # The three splits must partition the data with no overlap.
+          assert len(X_train) + len(X_val) + len(X_test) == len(X)
+          assert set(X_train.index).isdisjoint(X_val.index)
+          assert set(X_train.index).isdisjoint(X_test.index)
+          assert set(X_val.index).isdisjoint(X_test.index)
+
+          scaler = fit_amount_scaler(X_train)
+          assert scaler.mean_[0] == X_train["Amount"].mean(), "scaler saw more than train"
+          X_train = apply_amount_scaler(scaler, X_train)
+          X_val = apply_amount_scaler(scaler, X_val)
+          X_test = apply_amount_scaler(scaler, X_test)
+
+          model = LogisticRegression(class_weight="balanced", max_iter=200, random_state=42)
           model.fit(X_train, y_train)
-          metrics = evaluate_model(model, X_test, y_test)
 
-          print('Smoke test passed!')
-          print(f'  PR-AUC  : {metrics[\"pr_auc\"]:.4f}')
-          print(f'  Recall  : {metrics[\"recall\"]:.4f}')
-          print(f'  Precision: {metrics[\"precision\"]:.4f}')
+          val_metrics = evaluate_model(model, X_val, y_val)
+          test_metrics = evaluate_model(model, X_test, y_test)
+          print("Pipeline smoke test passed!")
+          print(f"  val  PR-AUC: {val_metrics['pr_auc']:.4f}  recall: {val_metrics['recall']:.4f}")
+          print(f"  test PR-AUC: {test_metrics['pr_auc']:.4f}  recall: {test_metrics['recall']:.4f}")
 
-          # Validate gate smoke test
-          from src.validate import run_validation_gate, ValidationStatus
+          # Validation gate: decisions are made on VAL, never on test.
           from unittest.mock import MagicMock, patch
+
           from mlflow.exceptions import MlflowException
 
+          from src.validate import ValidationStatus, run_validation_gate
+
           mock_client = MagicMock()
-          mock_client.get_model_version_by_alias.side_effect = MlflowException('Not found')
-          with patch('src.validate.mlflow.register_model') as mock_reg:
-              mock_ver = MagicMock(); mock_ver.version = '1'
-              mock_reg.return_value = mock_ver
-              result = run_validation_gate('fake-run', metrics, client=mock_client)
-          assert result.status in (ValidationStatus.FIRST_DEPLOYMENT, ValidationStatus.PROMOTED, ValidationStatus.REJECTED)
-          print(f'  Validation gate: {result.status.value}')
-          print('All smoke tests passed! ✅')
-          "
+          mock_client.get_model_version_by_alias.side_effect = MlflowException("Not found")
+          with patch("src.validate.mlflow.register_model") as mock_reg:
+              mock_reg.return_value = MagicMock(version="1")
+              result = run_validation_gate("fake-run", val_metrics, client=mock_client)
+          assert result.status in (
+              ValidationStatus.FIRST_DEPLOYMENT,
+              ValidationStatus.PROMOTED,
+              ValidationStatus.REJECTED,
+          )
+          print(f"  Validation gate: {result.status.value}")
+          print("All smoke tests passed!")
+          SMOKE
 
       # ------------------------------------------------------------------ #
       # 10. Upload test artifacts on failure (optional)
