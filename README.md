@@ -40,6 +40,12 @@ End-to-end MLOps pipeline for **real-time credit card fraud detection** on a sev
 >
 > **Success thresholds**: Recall ≥ 0.80 · Precision ≥ 0.50 · PR-AUC ≥ current `production`.
 > The gate rejects **6 of 7** runs — 4 on recall, 3 on precision.
+>
+> `lgbm_large` has the best test numbers but is rejected on validation recall 0.7975. With 79
+> frauds in the validation split recall moves in steps of 1/79, so that is **63/79 against an
+> effective floor of 64/79 — a miss of exactly one fraud case**. It is not promoted anyway:
+> overriding the gate using test numbers is the selection leak the pipeline was rebuilt to
+> remove.
 
 > ### ⚠️ These numbers are lower than earlier versions of this README, on purpose
 >

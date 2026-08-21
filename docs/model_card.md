@@ -143,47 +143,55 @@ it automatically.
 ### Why not `lgbm_large`?
 
 `lgbm_large` has the best test numbers in the table (PR-AUC 0.8703, precision 0.7615, 26 false
-positives) but is **rejected by the gate**: its validation recall is 0.7975 against a required
-0.80 — short by 0.0025, roughly one fraud out of the 79 in the validation split. Selecting it
-anyway would mean overriding the gate on the basis of test numbers, which is precisely the
-selection leak the pipeline was rewritten to remove. The honest reading is that the thresholds
-themselves need re-deriving from real review capacity; see §6 and `leakage_fix.md` §5.
+positives) but is **rejected by the gate**: validation recall 0.7975 against a required 0.80.
+
+That looks like a miss of 0.0025, which is misleading. With 79 frauds in the validation split,
+recall can only take multiples of 1/79 = 0.0127. `lgbm_large` caught **63 of 79**; the next
+attainable value is 64/79 = 0.8101. Nothing can score between them, so a floor of 0.80 is in
+practice a floor of 64/79 — and `lgbm_large` missed it by **exactly one fraud case**.
+
+It is not promoted anyway. Selecting it would mean overriding the gate on the strength of test
+numbers, which is precisely the selection leak the pipeline was rewritten to remove, and it would
+reduce the gate to something that only binds when it is convenient. The right response is a
+recall estimate stable enough to make the boundary meaningful — stratified k-fold over train+val
+would put ~394 frauds behind it instead of 79 — not a lower bar. See
+[`leakage_fix.md` §5.4](leakage_fix.md).
 
 ### Decision Threshold Analysis
 
-Measured on the held-out test set (56,962 transactions, **98 frauds**) with the registered
-champion `lgbm_regularized`. Actual sweep results, not estimates:
+The operating point is chosen on **validation** and verified on test exactly once.
+An earlier version of this section swept thresholds on the test set and drew a
+recommendation from the result — that is model selection on test, the same defect as
+Leak B, and it is recorded in [`leakage_fix.md` §5.1](leakage_fix.md). Reproduce with
+`uv run python scripts/select_threshold.py`, which fixes the criterion in code before
+producing any number.
 
-| Threshold | Recall | Precision | F1 | TP | FP | FN | Use case |
-|-----------|--------|-----------|-----|----|----|----|----------|
-| 0.1 | 0.9184 | 0.1100 | 0.1965 | 90 | 728 | 8 | Unusable — 1 alert in 9 is real |
-| 0.2 | 0.8980 | 0.2085 | 0.3385 | 88 | 334 | 10 | |
-| 0.3 | 0.8878 | 0.2979 | 0.4462 | 87 | 205 | 11 | |
-| 0.4 | 0.8878 | 0.3718 | 0.5241 | 87 | 147 | 11 | |
-| **0.5** (deployed) | **0.8878** | **0.4555** | **0.6021** | **87** | **104** | **11** | **Neutral default** |
-| 0.6 | 0.8878 | 0.5472 | 0.6770 | 87 | 72 | 11 | Clears the 0.50 precision floor |
-| 0.7 | 0.8878 | 0.6259 | 0.7342 | 87 | 52 | 11 | **Same recall, half the false alarms** |
-| 0.8 | 0.8673 | 0.7025 | 0.7763 | 85 | 36 | 13 | High precision |
-| 0.9 | 0.8265 | 0.7570 | 0.7902 | 81 | 26 | 17 | Max precision |
+**Selection (validation only — 45,569 rows, 79 frauds).** Criterion: recall ≥ 0.80,
+then maximise precision; tie-break to the lower threshold. 84 of 99 grid points were
+eligible. **Chosen: 0.81** — validation recall 0.8101 (64/79), precision 0.7805,
+TP 64, FP 18, FN 15.
 
-Three things worth stating plainly:
+**Verification (test — 56,962 rows, 98 frauds — scored once):**
 
-1. **Recall is completely flat from 0.3 to 0.7** at 0.8878 — the same 87 frauds — while false
-   positives fall from 205 to 52. Between 0.5 and 0.7 this model gives up *nothing* and halves the
-   review workload twice over. The deployed default of 0.5 is not where this model belongs.
-2. **0.5 does not clear the project's own precision floor on test** (0.4555 < 0.50), even though
-   it cleared it on validation (0.5238). Threshold 0.6 or 0.7 would. This is discussed in
-   [`leakage_fix.md` §5](leakage_fix.md) — it is a symptom of thresholds calibrated against
-   pre-leak-fix numbers, not of the model being broken.
-3. **The threshold is nevertheless not changed here.** Pricing a missed fraud against an analyst's
-   review time is a business input this project does not have, and `AGENTS.md` requires the
-   decision be taken with the project owner rather than read off a metric.
+| Threshold | Recall | Precision | F1 | TP | FP | FN |
+|---|---|---|---|---|---|---|
+| **0.50** (deployed default) | 0.8878 | 0.4555 ❌ below the 0.50 floor | 0.6021 | 87 | 104 | 11 |
+| **0.81** (selected on val) | 0.8673 | **0.7083** ✅ | 0.7798 | 85 | **35** | 13 |
 
-For contrast, the Logistic Regression baseline at threshold 0.5 produces **TP=89, FP=1,379,
-FN=9** — it catches 2 more frauds at the cost of ~13× more false alarms.
+Moving 0.50 → 0.81 costs **2 frauds** and removes **69 false alarms**, and lifts test
+precision from below the project's own floor to comfortably above it.
 
-> ⚠️ Threshold change is a **business decision** — contact project owner before modifying.
-> `DECISION_THRESHOLD` lives in `src/config.py`.
+Note the optimism in the val estimate: validation precision 0.7805 against test
+precision 0.7083. That gap is the selection bias of taking a maximum over 84
+candidates on a 79-fraud split — treat 0.7805 as an overestimate, not a forecast.
+
+> ⚠️ **`DECISION_THRESHOLD` remains 0.50.** The table above is a measurement, not a
+> change. Pricing a missed fraud against an analyst's review time is a business input
+> this project does not have, and `AGENTS.md` requires the decision be taken with the
+> project owner. The analysis exists so the conversation can start from evidence.
+
+For contrast, the Logistic Regression baseline at threshold 0.5 produces **TP=89,
+FP=1,379, FN=9** — 2 more frauds caught at roughly 13× the false alarms.
 
 ---
 
@@ -229,10 +237,15 @@ What remains open, honestly stated:
   winner upward. It shows: the promoted champion clears the precision floor on validation
   (0.5238) and misses it on test (0.4555). Stratified k-fold on train+val, selecting on the mean,
   is the change most likely to close that gap.
+- **The gate's recall floor is finer than the data can resolve.** With 79 frauds in the
+  validation split, recall moves in steps of 1/79 = 0.0127, so a floor of 0.80 is
+  operationally a floor of 64/79 = 0.8101. `lgbm_large` was rejected for missing by
+  **exactly one fraud case** (63/79), `xgb_default` by two. The fix is a better estimator —
+  k-fold would put ~394 frauds behind the estimate instead of 79 — not a lower bar.
+  Details in [`leakage_fix.md` §5.4](leakage_fix.md).
 - **The gate's thresholds were calibrated against pre-fix numbers.** `MIN_RECALL = 0.80` and
-  `MIN_PRECISION = 0.50` were set when metrics were inflated. Under honest measurement the two
-  models with the best test performance are rejected for missing recall by 0.0025 and 0.0152.
-  Re-deriving both from real review capacity is a business conversation, not a code change.
+  `MIN_PRECISION = 0.50` were set when metrics were inflated. Re-deriving both from real
+  review capacity is a business conversation, not a code change.
 - **No refit on train+val after selection.** The champion is trained on 64% of the data and
   shipped as-is. Refitting the chosen configuration on train+val at the selected iteration count
   would use 80% and typically helps, but it forfeits the ability to re-verify the exact artifact

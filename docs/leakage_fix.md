@@ -208,63 +208,136 @@ baseline is now **+0.0652 test PR-AUC (+9.2%)**, where the leaky pipeline report
 
 ---
 
-## 5. An unresolved finding this fix exposed
+## 5. What this fix exposed
 
-The promoted champion clears the gate on validation (precision 0.5238) but **falls
-below the same floor on the held-out test set (precision 0.4555)**.
+### 5.1 A third leak, committed while writing this document
 
-This is not a bug in the fix — it is the fix working. A single 45,569-row validation
-split containing 79 frauds is a noisy basis for a precision estimate, and selecting
-the maximum over seven candidates on that split biases the winner upward. The test
-set, untouched by selection, reports the shortfall.
+The first version of this section contained a threshold sweep run on the **test**
+set, ending in the observation that "at threshold 0.7 this model would catch the
+same 87 frauds with 52 false alarms" — a recommendation derived from test data.
 
-Two things follow, and neither is a hyperparameter problem:
+That is the same defect as Leak B. A threshold sweep is model selection: it scores
+candidates and keeps the best. Doing it on test and reading a recommendation off the
+result makes test the selection set, exactly as early stopping did. It was harder to
+notice here only because it wore the costume of analysis rather than training.
 
-1. **The thresholds themselves were calibrated against leaked numbers.** `MIN_RECALL
-   = 0.80` and `MIN_PRECISION = 0.50` were set when metrics were inflated. Under
-   honest measurement the strongest models by test performance — `lgbm_large`
-   (test precision 0.7615) and `xgb_default` (0.7714) — are rejected for missing
-   recall by 0.003 and 0.015. The gate is now rejecting the models an operations
-   team would most want. Re-deriving both thresholds from actual review capacity is
-   a business conversation, and per `AGENTS.md` it is not a change to make
-   unilaterally.
-2. **Selection on a single validation split is too noisy at this fraud count.**
-   Stratified k-fold cross-validation on train+val, selecting on the mean, would give
-   a far more stable estimate than one 79-fraud split. That is the change most likely
-   to close the val/test gap.
+Worth recording plainly, because it is the most transferable lesson in this document:
+**knowing the rule did not prevent breaking it.** The pipeline had been rewritten
+specifically to remove test-set selection, and within the same day a report drew an
+operating-point recommendation from that same test set. Leakage is not primarily a
+knowledge problem; it is a discipline problem, and it recurs wherever a decision and
+an evaluation touch the same rows.
 
-Deliberately **not** done: tuning hyperparameters until the numbers come back up.
-That would re-introduce exactly the selection bias this document exists to remove —
-the difference being that it would be invisible rather than logged.
+The remedy adopted is procedural rather than educational: the protocol now lives in
+`scripts/select_threshold.py`, where the selection criterion is fixed **in code**
+before any number is produced, and the test split is read exactly once at the end.
 
-### Threshold sweep, promoted champion, test set
+### 5.2 Choosing the operating point, correctly
 
-`lgbm_regularized` is unusually threshold-sensitive, which is the real reason its
-0.5 precision looks poor:
+Protocol, declared before running:
 
-| Threshold | Recall | Precision | F1 | TP | FP | FN |
-|---|---|---|---|---|---|---|
-| 0.3 | 0.8878 | 0.2979 | 0.4462 | 87 | 205 | 11 |
-| **0.5** (deployed) | **0.8878** | **0.4555** | **0.6021** | **87** | **104** | **11** |
-| 0.6 | 0.8878 | 0.5472 | 0.6770 | 87 | 72 | 11 |
-| 0.7 | 0.8878 | 0.6259 | 0.7342 | 87 | 52 | 11 |
-| 0.8 | 0.8673 | 0.7025 | 0.7763 | 85 | 36 | 13 |
-| 0.9 | 0.8265 | 0.7570 | 0.7902 | 81 | 26 | 17 |
+1. Sweep thresholds 0.01–0.99 on **validation only**.
+2. Keep those with validation recall ≥ `MIN_RECALL` (0.80).
+3. Among those, take the highest validation precision; tie-break to the lower threshold.
+4. Score that one threshold on test **once**, and report whatever comes out.
 
-Recall is completely flat from 0.3 to 0.7 while false positives fall from 205 to 52.
-At threshold 0.7 this model would catch the same 87 frauds with 52 false alarms and
-a test precision of 0.6259 — comfortably above the floor. The default of 0.5 is
-simply not where this model should sit. Moving it remains a business decision
-(`DECISION_THRESHOLD` in `src/config.py`), not one to make from the metrics alone.
+**Selected on validation: threshold 0.81** — 84 of 99 grid points were eligible.
+Validation scores at 0.81: recall 0.8101 (64/79), precision 0.7805, TP 64, FP 18, FN 15.
+
+**Verification on test, scored once:**
+
+| Threshold | Recall | Precision | TP | FP | FN |
+|---|---|---|---|---|---|
+| 0.50 (deployed default) | 0.8878 | 0.4555 ❌ below floor | 87 | 104 | 11 |
+| **0.81 (selected on val)** | **0.8673** | **0.7083** ✅ | **85** | **35** | **13** |
+
+Moving from 0.50 to 0.81 costs **2 frauds** (87 → 85) and removes **69 false alarms**
+(104 → 35). It also lifts test precision from below the project's own 0.50 floor to
+0.7083, comfortably above it.
+
+The val-selected threshold generalised in the right direction but with visible
+optimism: validation precision 0.7805 against test precision 0.7083. That gap is the
+selection bias of picking a maximum over 84 candidates on a 79-fraud split — the same
+mechanism described in §5.3 below, and a reason to treat 0.7805 as an overestimate
+rather than a forecast.
+
+**`DECISION_THRESHOLD` remains 0.50 in `src/config.py`.** This section is a
+measurement, not a change. Pricing a missed fraud against an analyst's review time is
+a business input, and `AGENTS.md` requires that decision be taken with the project
+owner. The analysis exists so that the conversation can start from evidence.
+
+### 5.3 The champion clears the precision floor on validation and misses it on test
+
+Validation precision 0.5238, test precision 0.4555.
+
+This is not a bug — it is the fix working. A 45,569-row validation split containing
+**79 frauds** is a noisy basis for a precision estimate, and selecting the maximum
+over seven candidates on that split biases the winner upward. The test set, untouched
+by selection, reports the shortfall.
+
+### 5.4 Why the gate rejected the strongest model: recall is quantised
+
+`lgbm_large` was rejected for validation recall of 0.7975 against a floor of 0.80 —
+apparently a miss of 0.0025. That framing is misleading.
+
+With 79 frauds in the validation split, recall cannot take arbitrary values. It moves
+in steps of **1/79 = 0.0127**. Every observed value is such a step, confirmed against
+the logged confusion counts:
+
+| Run | val recall | TP / 79 |
+|---|---|---|
+| `lr_baseline` | 0.8861 | 70/79 |
+| `lgbm_regularized` ⭐ | 0.8354 | 66/79 |
+| `lgbm_default` | 0.8228 | 65/79 |
+| `lgbm_large` | 0.7975 | **63/79** |
+| `xgb_default` | 0.7848 | 62/79 |
+| `xgb_regularized` | 0.7848 | 62/79 |
+| `xgb_deep` | 0.7342 | 58/79 |
+
+The floor of 0.80 falls in the gap between 63/79 = 0.7975 and 64/79 = 0.8101. No model
+can score between those values, so **a floor of 0.80 is operationally a floor of
+64/79**. `lgbm_large` was rejected for missing by **exactly one fraud case**, and
+`xgb_default` by two.
+
+Two consequences:
+
+- **A threshold expressed to two decimals implies a precision the data cannot
+  support.** On a 79-positive split, 0.80 and 0.8101 are the same constraint. Any
+  gate threshold should be sanity-checked against the grain of the split it is
+  evaluated on.
+- **The correct response is a better estimator, not a lower bar.** Stratified k-fold
+  cross-validation over train+val would put roughly 394 frauds behind the recall
+  estimate instead of 79, shrinking the grain by a factor of five and making the
+  decision far less sensitive to a single case landing either side of the boundary.
+  Lowering the floor to accommodate `lgbm_large` would be fitting the rule to the
+  result — the same failure as §5.1, one level up.
+
+`MIN_RECALL` is therefore unchanged. So is the champion: `lgbm_regularized` is the
+only run that passed, and overriding the gate on the strength of test numbers would
+dismantle the mechanism this project was built to demonstrate.
+
+### 5.5 Open items
+
+- **Selection runs on a single validation split.** Stratified k-fold on train+val,
+  selecting on the mean, is the change most likely to close the val/test gap in §5.3
+  and the quantisation problem in §5.4.
+- **The gate's thresholds were calibrated against leaked numbers.** `MIN_RECALL = 0.80`
+  and `MIN_PRECISION = 0.50` were set when metrics were inflated. Re-deriving both from
+  real review capacity is a business conversation.
+
+Deliberately **not** done: tuning hyperparameters until the numbers come back up, and
+re-running any of the analyses above after seeing a test result. Both would
+re-introduce selection bias in a form that leaves no trace in the code.
 
 ---
 
 ## 6. Reproducing
 
 ```bash
-uv run python src/train.py                        # 7 runs, logs val_* and test_*
+uv run python src/train.py                             # 7 runs, logs val_* and test_*
 uv run python scripts/select_best_model.py --dry-run   # gate decision, no promotion
 uv run python scripts/select_best_model.py             # promote if the gate passes
+uv run python scripts/select_threshold.py              # val-select / test-verify (§5.2)
 uv run pytest tests/                                   # 73 tests
 ```
 
@@ -287,3 +360,7 @@ return silently:
 - `src/config.py` scaler constants must match the scaler fitted from the raw CSV.
 - A production run without `val_pr_auc` must reset the baseline rather than be
   compared against, while the hard thresholds continue to apply.
+
+The threshold protocol of §5.2 is not test-guarded but is enforced structurally:
+`scripts/select_threshold.py` fixes the selection criterion in code and reads the test
+split exactly once, at the end, after the threshold is already chosen.
