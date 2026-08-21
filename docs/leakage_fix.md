@@ -266,14 +266,76 @@ measurement, not a change. Pricing a missed fraud against an analyst's review ti
 a business input, and `AGENTS.md` requires that decision be taken with the project
 owner. The analysis exists so that the conversation can start from evidence.
 
-### 5.3 The champion clears the precision floor on validation and misses it on test
+### 5.3 The champion passes the precision floor on validation and misses it on test
 
-Validation precision 0.5238, test precision 0.4555.
+The promoted model, `lgbm_regularized`, was admitted by the gate on a validation
+precision of **0.5238** against a floor of 0.50. On the held-out test split its
+precision is **0.4555** — below the very floor that admitted it.
 
-This is not a bug — it is the fix working. A 45,569-row validation split containing
-**79 frauds** is a noisy basis for a precision estimate, and selecting the maximum
-over seven candidates on that split biases the winner upward. The test set, untouched
-by selection, reports the shortfall.
+**This is not a defect in the gate.** Two things follow from that, and both matter:
+
+**The gate is correct to judge on validation.** Its job is to decide promotion, and a
+decision made using test data turns test into a selection set — the exact defect
+documented in §1 (Leak B) and §5.1. Judging on validation is the design, not a
+compromise.
+
+**The test set must not acquire a veto.** It is tempting to add "…and test precision
+must also clear 0.50" as a fourth gate condition. That would be a mistake of the same
+family: any rule that can block a promotion is a selection rule, and a selection rule
+reading test data makes test part of selection. The moment a candidate can be rejected
+on test, the surviving candidate's test score stops being an unbiased estimate of
+anything. The test set keeps its value precisely by having no authority.
+
+So the contradiction is not a signal to change the gate's inputs. **It is evidence
+that the validation estimate itself is not trustworthy**, for two compounding reasons:
+
+1. **The split is too small for the quantity being estimated.** 79 frauds is a thin
+   basis for a precision estimate. §5.4 shows the same problem in the recall floor,
+   where a 79-positive split makes recall move in visible steps of 1/79.
+2. **Winner's curse.** Taking the maximum over seven candidates on one noisy split
+   systematically favours whichever candidate got the most favourable noise. The
+   winner's validation score is therefore an overestimate *by construction*, before
+   any question of model quality arises. The same mechanism appears again in §5.2:
+   the threshold chosen on validation showed precision 0.7805, and delivered 0.7083
+   on test.
+
+Both are properties of the **estimator**, not of the model or of the thresholds.
+
+#### Two design-level fixes
+
+Neither is applied here — this document records the finding; changing the gate is a
+separate, deliberate piece of work.
+
+**A. Estimate on stratified k-fold, not on a single split.**
+Running stratified k-fold across train+val and feeding the gate the *mean* metric
+would put roughly **394 frauds** behind each estimate instead of 79 — a five-fold
+reduction in the sampling noise, and a five-fold finer grain on recall. It also damps
+the winner's curse: a candidate must be good across folds rather than lucky on one.
+The cost is k times the training compute, which at this dataset size is minutes. This
+is the single change most likely to make the val estimate predict the test result.
+
+**B. Gate the model *at its operating point*, not the model and threshold separately.**
+The pipeline currently makes two decisions in isolation: `select_best_model.py` ranks
+candidates at a fixed 0.5, and `select_threshold.py` picks a threshold afterwards for
+whichever model won. But precision and recall are properties of a *(model, threshold)*
+pair, not of a model. Gating at 0.5 therefore tests an operating point nobody intends
+to run — §5.2 shows the champion reaching test precision 0.7083 at threshold 0.81
+while scoring 0.4555 at the 0.5 the gate used.
+
+The coherent alternative is to select the pair jointly: for each candidate, choose the
+threshold on validation that meets the recall floor with maximum precision, then gate
+and rank the candidate *at that threshold*. A model is then admitted on the numbers it
+would actually produce in service. This would likely change which model is promoted —
+`lgbm_large` and `xgb_default`, both rejected here on recall at 0.5, may well clear
+both floors at a lower threshold — which is exactly why it must be done as an explicit
+change with its own before/after measurement, not slipped in while looking at these
+results.
+
+Neither fix is an argument for lowering `MIN_PRECISION` or `MIN_RECALL`, and neither
+justifies overriding the gate's current verdict. `lgbm_regularized` remains the
+champion: it is the only run that passed the gate as the gate is defined today, and
+replacing it on the strength of test numbers would dismantle the mechanism this
+project exists to demonstrate.
 
 ### 5.4 Why the gate rejected the strongest model: recall is quantised
 
@@ -320,7 +382,9 @@ dismantle the mechanism this project was built to demonstrate.
 
 - **Selection runs on a single validation split.** Stratified k-fold on train+val,
   selecting on the mean, is the change most likely to close the val/test gap in §5.3
-  and the quantisation problem in §5.4.
+  and the quantisation problem in §5.4 — see §5.3 fix A.
+- **Model and threshold are selected separately.** The gate ranks candidates at 0.5, a
+  threshold nobody intends to operate at — see §5.3 fix B.
 - **The gate's thresholds were calibrated against leaked numbers.** `MIN_RECALL = 0.80`
   and `MIN_PRECISION = 0.50` were set when metrics were inflated. Re-deriving both from
   real review capacity is a business conversation.
@@ -338,7 +402,8 @@ uv run python src/train.py                             # 7 runs, logs val_* and 
 uv run python scripts/select_best_model.py --dry-run   # gate decision, no promotion
 uv run python scripts/select_best_model.py             # promote if the gate passes
 uv run python scripts/select_threshold.py              # val-select / test-verify (§5.2)
-uv run pytest tests/                                   # 73 tests
+uv run python scripts/benchmark_model_load.py          # cold vs warm startup cost
+uv run pytest tests/                                   # 88 tests
 ```
 
 Split sizes: train 182,276 (315 frauds) · val 45,569 (79) · test 56,962 (98).
@@ -349,7 +414,7 @@ Amount scaler, fitted on train only: mean **87.9702**, std **245.5762** — mirr
 
 ## 7. What is now guarded by tests
 
-Test count rose from 61 to **73**. The additions exist so these defects cannot
+Test count rose from 61 to **88**. The additions exist so these defects cannot
 return silently:
 
 - `preprocess()` must leave `Amount` raw.
@@ -360,6 +425,8 @@ return silently:
 - `src/config.py` scaler constants must match the scaler fitted from the raw CSV.
 - A production run without `val_pr_auc` must reset the baseline rather than be
   compared against, while the hard thresholds continue to apply.
+- `DECISION_THRESHOLD` must follow its environment variable, and a malformed value
+  must raise rather than silently serve the 0.50 default.
 
 The threshold protocol of §5.2 is not test-guarded but is enforced structurally:
 `scripts/select_threshold.py` fixes the selection criterion in code and reads the test

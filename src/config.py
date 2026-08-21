@@ -4,6 +4,7 @@ All paths, constants, and hyperparameter defaults are defined here.
 Import from this module to avoid magic strings/numbers scattered across code.
 """
 
+import os
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -83,9 +84,59 @@ RANDOM_STATE: int = 42
 # ---------------------------------------------------------------------------
 # Decision threshold
 # ---------------------------------------------------------------------------
-# ⚠️ DO NOT change without consulting AGENTS.md — this is a business decision.
+# The operating point: probability at or above which a transaction is flagged.
+#
+# ⚠️ This is a BUSINESS decision, not a technical one — it prices a missed fraud
+# against an analyst's review time. See AGENTS.md.
+#
+# It is read from the DECISION_THRESHOLD environment variable so the operations
+# team can move the operating point without a code change, an image rebuild, or
+# a retrain. The value is read once at import, i.e. at process startup, so a
+# running server keeps the threshold it started with — restart to apply a change.
+#
+# Default 0.50 is a neutral placeholder, deliberately not tuned.
+# Measured alternative: 0.81, selected on validation and verified once on test
+# (docs/leakage_fix.md §5.2) — on the test split it gives up 2 frauds to remove
+# 69 false alarms and lifts precision from 0.4555 to 0.7083. Adopting it is the
+# operations team's call, so it is documented rather than set here.
 
-DECISION_THRESHOLD: float = 0.5
+_DEFAULT_DECISION_THRESHOLD = 0.5
+
+
+def _load_decision_threshold() -> float:
+    """Read DECISION_THRESHOLD from the environment, validating it.
+
+    Returns:
+        The configured threshold, or 0.5 when the variable is unset or blank.
+
+    Raises:
+        ValueError: If the variable is set but is not a number strictly between
+            0 and 1. Failing loudly is deliberate: an operator who sets a
+            malformed threshold intended to change the operating point, and
+            silently serving 0.5 instead would hide that from them.
+    """
+    raw = os.environ.get("DECISION_THRESHOLD")
+    if raw is None or not raw.strip():
+        return _DEFAULT_DECISION_THRESHOLD
+
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"DECISION_THRESHOLD={raw!r} is not a number. "
+            "Set it to a value strictly between 0 and 1, e.g. 0.81."
+        ) from exc
+
+    if not 0.0 < value < 1.0:
+        raise ValueError(
+            f"DECISION_THRESHOLD={value} is out of range. "
+            "It must be strictly between 0 and 1 — 0 would flag every "
+            "transaction and 1 would flag none."
+        )
+    return value
+
+
+DECISION_THRESHOLD: float = _load_decision_threshold()
 
 # ---------------------------------------------------------------------------
 # Logistic Regression baseline hyperparameters

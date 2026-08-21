@@ -83,7 +83,7 @@ flowchart TD
 
     J[GitHub Push] --> K[GitHub Actions CI]
     K --> K1[ruff lint + format]
-    K --> K2[pytest 61 tests]
+    K --> K2[pytest 88 tests]
     K --> K3[pipeline smoke test]
 ```
 
@@ -263,10 +263,77 @@ docker run -p 8000:8000 fraud-detection
 
 ---
 
+## 🎚️ Decision threshold
+
+The operating point is read from the `DECISION_THRESHOLD` environment variable at process
+startup. Moving it needs **no code change, no image rebuild and no retrain** — set the variable
+and restart the service.
+
+```bash
+# default: 0.50
+uv run uvicorn src.api:app
+
+# operate at 0.81
+DECISION_THRESHOLD=0.81 uv run uvicorn src.api:app
+```
+
+On Render, set it under *Environment* alongside `HF_REPO_ID`. A value that is not a number
+strictly between 0 and 1 raises at startup rather than silently falling back — an operator who
+sets a malformed threshold meant to change the operating point, and quietly serving 0.50 would
+hide that from them.
+
+**Default 0.50 · measured alternative 0.81.** The 0.81 figure was selected on the *validation*
+split (recall ≥ 0.80, then maximum precision) and verified on the test split exactly once —
+reproduce with `uv run python scripts/select_threshold.py`.
+
+| Threshold | Recall | Precision | TP | FP | FN |
+|---|---|---|---|---|---|
+| **0.50** (default) | 0.8878 | 0.4555 — below the project's own 0.50 floor | 87 | **104** | 11 |
+| **0.81** (recommended) | 0.8673 | **0.7083** | 85 | **35** | 13 |
+
+Held-out test split, 56,962 transactions, 98 frauds. Moving 0.50 → 0.81 gives up **2 frauds** to
+remove **69 false alarms**, and lifts precision above the floor.
+
+> The default stays 0.50. Choosing an operating point prices a missed fraud against an analyst's
+> review time — a business input this project does not have, and per `AGENTS.md` not a decision
+> to take from a metric. The table exists so that conversation can start from evidence.
+
+---
+
+## ⏱️ Startup & latency
+
+**Model load at startup** — measured with `scripts/benchmark_model_load.py` against the Hugging
+Face Hub artifact (1.16 MB):
+
+| Scenario | Download | `joblib.load` | Total |
+|---|---|---|---|
+| **Cold** (fresh container, empty cache) | ~3.3–4.1 s | ~1.2–1.4 s | **~4.7–5.4 s** |
+| **Warm** (cache already populated) | ~0.3 s | ~5 ms | **~0.3 s** |
+
+Cold is the real Render cold-start cost — a new container holds no cache. The ~1.3 s
+`joblib.load` on a cold process is dominated by importing LightGBM, not by file size: a 0.26 MB
+local pickle takes the same ~1.4 s in a fresh interpreter and ~5 ms once warm. Network timings
+vary by connection and by the Hub's response, so treat these as an order of magnitude.
+
+**Inference latency** — measured in-process over 300 iterations after warm-up (request handling +
+preprocessing + inference; excludes network transit):
+
+| Endpoint | Median | p95 | Per transaction |
+|---|---|---|---|
+| `POST /predict` (1 tx) | **1.58 ms** | 2.45 ms | 1.58 ms |
+| `POST /predict/batch` (10 tx) | 2.33 ms | 3.88 ms | 0.233 ms |
+| `POST /predict/batch` (100 tx) | 5.99 ms | 7.94 ms | **0.060 ms** |
+
+Batching pays: 100 transactions cost 5.99 ms in one call versus ~158 ms as 100 separate calls,
+because `predict_proba` runs once for the whole frame. Per-request fixed cost — HTTP handling,
+Pydantic validation, DataFrame construction — dominates single-transaction latency, not the model.
+
+---
+
 ## 🧪 Testing & Linting
 
 ```bash
-# Run all tests (61 tests)
+# Run all tests (88 tests)
 uv run pytest tests/ -v
 
 # Lint check
@@ -280,10 +347,17 @@ uv run ruff format src/ tests/ scripts/
 
 | Test file | Tests | Scope |
 |-----------|-------|-------|
-| `tests/test_features.py` | 16 | Feature engineering, data loading, split |
-| `tests/test_evaluate.py` | 14 | Metrics computation, edge cases |
-| `tests/test_validate.py` | 11 | Validation gate logic, promotion decisions |
+| `tests/test_features.py` | 27 | Feature engineering, three-way split, train-only scaler |
 | `tests/test_api.py` | 20 | FastAPI endpoints, request/response validation |
+| `tests/test_config.py` | 14 | `DECISION_THRESHOLD` environment override and validation |
+| `tests/test_evaluate.py` | 14 | Metrics computation, edge cases |
+| `tests/test_validate.py` | 13 | Validation gate logic, promotion, protocol change |
+| **Total** | **88** | |
+
+Eleven of the `test_features.py` tests exist specifically to stop the two data leaks from
+returning: `preprocess()` must leave `Amount` raw, the fitted scaler must have seen only the
+training split, no index may appear in two splits, and changing `val_size` must not move a
+single row into or out of the test set.
 
 ---
 
@@ -300,10 +374,12 @@ mlops-fraud-detection/
 │   ├── validate.py           # Model validation gate (new vs production)
 │   └── api.py                # FastAPI app: /predict, /predict/batch, /health
 ├── scripts/
-│   ├── export_model.py       # Export MLflow model → local .pkl for Docker
-│   ├── register_model.py     # Register a run to MLflow Registry
-│   └── select_best_model.py  # Auto-select best run by PR-AUC → promote
-├── tests/                    # pytest test suite (61 tests)
+│   ├── benchmark_model_load.py  # Cold vs warm model-load timing (HF Hub)
+│   ├── export_model.py          # Export MLflow model → local .pkl for Docker
+│   ├── register_model.py        # DEPRECATED — superseded by select_best_model.py
+│   ├── select_best_model.py     # Rank by val PR-AUC → validation gate → promote
+│   └── select_threshold.py      # Choose threshold on val, verify once on test
+├── tests/                    # pytest test suite (88 tests)
 ├── notebooks/
 │   └── 01_eda.py             # EDA: class distribution, feature correlation, PCA
 ├── docs/
@@ -329,9 +405,10 @@ mlops-fraud-detection/
 |----------|-----------|
 | **PR-AUC as primary metric** | ROC-AUC is overly optimistic on imbalanced data (~99.83% negative). PR-AUC focuses on the rare fraud class. |
 | **`class_weight='balanced'`** | Simpler than SMOTE, no data leakage risk, stable across all imbalance ratios. |
-| **Logistic Regression baseline** | Benchmark to prove LightGBM actually improves (+23% PR-AUC) and detect pipeline bugs. |
-| **Decision threshold = 0.5** | Business decision — lowering recall/raising precision trade-off requires stakeholder input. |
-| **Stratified split** | Preserves the 0.17% fraud ratio in both train and test sets. |
+| **Logistic Regression baseline** | Benchmark to prove the boosted trees actually improve (+5.0% test PR-AUC) and detect pipeline bugs. |
+| **Decision threshold = 0.5, overridable by env var** | Business decision — see [Decision threshold](#-decision-threshold) below. |
+| **Stratified 64/16/20 split, test carved out first** | Preserves the 0.17% fraud ratio in every split, and keeps the test set out of early stopping and model selection. |
+| **Selection on validation, never on test** | Early stopping, ranking and the validation gate all read `val_*`. Test is scored once per run, for reporting only. |
 | **MLflow Model Registry** | Reproducible model versioning with aliased promotion (`production`). |
 
 ---
@@ -348,8 +425,10 @@ mlops-fraud-detection/
 
 ## 📖 Documentation
 
+- [Data Leakage: Diagnosis, Fix, and Measured Impact](docs/leakage_fix.md) — two leaks found in this
+  pipeline, what removing them cost the reported metrics, and what that exposed about the gate
+- [Model Card](docs/model_card.md) — full evaluation results, threshold analysis, limitations
 - [Architecture Design](docs/architecture.md) — metric selection, imbalance strategy, pipeline design
-- [Model Card](docs/model_card.md) — full evaluation results, limitations, ethical considerations
 - [AGENTS.md](AGENTS.md) — AI session management and coding conventions
 
 ---
