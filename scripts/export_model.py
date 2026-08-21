@@ -24,7 +24,13 @@ import joblib
 import mlflow
 from mlflow.tracking import MlflowClient
 
-from src.config import LOCAL_MODEL_PATH, MLFLOW_TRACKING_URI, MODEL_ARTIFACT_FILENAME
+from src.config import (
+    AMOUNT_MEAN,
+    AMOUNT_STD,
+    LOCAL_MODEL_PATH,
+    MLFLOW_TRACKING_URI,
+    MODEL_ARTIFACT_FILENAME,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -70,6 +76,22 @@ def _load_any_flavor(model_uri: str):
     raise RuntimeError(
         f"Cannot load model '{model_uri}' — no supported flavor found."
     ) from last_exc
+
+
+def _load_run_metrics(run_id: str) -> dict[str, float]:
+    """Read the metrics logged on an MLflow run.
+
+    Args:
+        run_id: MLflow run ID backing the registered model version.
+
+    Returns:
+        Metric name -> value, or an empty dict if the run cannot be read.
+    """
+    try:
+        return dict(MlflowClient().get_run(run_id).data.metrics)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"Could not read metrics for run {run_id}: {exc}")
+        return {}
 
 
 def export_model(upload: bool = False) -> Path:
@@ -162,7 +184,15 @@ def _upload_to_hf_hub(model_path: Path, model_version) -> None:
         f"https://huggingface.co/{hf_repo_id}/blob/main/{MODEL_ARTIFACT_FILENAME}"
     )
 
-    # Upload model card
+    # Upload model card. Every number is read from the MLflow run so the card can
+    # never drift away from the model it describes — the failure mode that put
+    # fabricated metrics in this project's README for five days.
+    metrics = _load_run_metrics(model_version.run_id)
+
+    def _m(key: str, fmt: str = ".4f") -> str:
+        value = metrics.get(key)
+        return f"{value:{fmt}}" if value is not None else "n/a"
+
     card_content = f"""---
 language: en
 tags:
@@ -173,22 +203,41 @@ tags:
 license: mit
 ---
 
-# Credit Card Fraud Detection — LightGBM Champion Model
+# Credit Card Fraud Detection — Champion Model
 
 ## Model Description
 
-LightGBM (`lgbm_large`) champion model for credit card fraud detection on the
+Champion model for credit card fraud detection on the
 [Kaggle Credit Card Fraud Dataset](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud).
-Registered in MLflow Registry as `fraud-detection-model@production`.
+Registered in MLflow Registry as `{REGISTERED_MODEL_NAME}@{MODEL_ALIAS}`.
 
-## Performance (Test Set — 56,962 samples)
+Trained under a leak-free protocol: stratified 64/16/20 train/validation/test split, the
+`Amount` scaler fitted on the training split only, early stopping watched on validation, and
+the champion selected by validation PR-AUC. The test split influences no decision and is
+scored once for reporting.
+
+## Performance
+
+Selected on **validation** ({_m("n_val_samples", ",.0f")} rows):
 
 | Metric | Value |
 |--------|-------|
-| PR-AUC | 0.8770 |
-| Recall | 0.8571 |
-| Precision | 0.8485 |
-| F1 | 0.8528 |
+| PR-AUC | {_m("val_pr_auc")} |
+| Recall | {_m("val_recall")} |
+| Precision | {_m("val_precision")} |
+| F1 | {_m("val_f1")} |
+
+Reported on the held-out **test** split ({_m("n_test_samples", ",.0f")} rows):
+
+| Metric | Value |
+|--------|-------|
+| PR-AUC | {_m("test_pr_auc")} |
+| Recall | {_m("test_recall")} |
+| Precision | {_m("test_precision")} |
+| F1 | {_m("test_f1")} |
+| True positives | {_m("test_tp", ".0f")} |
+| False positives | {_m("test_fp", ".0f")} |
+| False negatives | {_m("test_fn", ".0f")} |
 
 ## Usage
 
@@ -197,7 +246,8 @@ import joblib
 import numpy as np
 
 model = joblib.load("{MODEL_ARTIFACT_FILENAME}")
-# features: V1-V28 (PCA), Amount (StandardScaler μ=88.35, σ=250.12)
+# features: V1-V28 (PCA, pass through), Amount scaled with the TRAINING-split
+# StandardScaler: mu={AMOUNT_MEAN}, sigma={AMOUNT_STD}
 X = np.array([[...]])  # shape (1, 29)
 proba = model.predict_proba(X)[:, 1]  # fraud probability
 ```

@@ -32,6 +32,8 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from src.config import (
+    AMOUNT_MEAN,
+    AMOUNT_STD,
     DECISION_THRESHOLD,
     FEATURE_COLS,
     MLFLOW_TRACKING_URI,
@@ -59,10 +61,12 @@ REGISTERED_MODEL_NAME = "fraud-detection-model"
 MODEL_ALIAS = "production"
 HF_MODEL_FILENAME = MODEL_ARTIFACT_FILENAME  # kept in sync with export_model.py
 
-# Approximate Amount scaler stats from the full Kaggle creditcard dataset
-# (computed during EDA — used to scale incoming raw Amount values)
-_AMOUNT_MEAN = 88.3496
-_AMOUNT_STD = 250.1201
+# Amount scaler statistics, imported from src/config.py so that serving uses
+# EXACTLY the transform the champion was trained with. They come from a scaler
+# fitted on the training split only — never the full dataset, which would leak
+# test statistics into training (see docs/leakage_fix.md).
+_AMOUNT_MEAN = AMOUNT_MEAN
+_AMOUNT_STD = AMOUNT_STD
 
 # ---------------------------------------------------------------------------
 # Global model state
@@ -167,7 +171,7 @@ app = FastAPI(
     title="Fraud Detection API",
     description=(
         "Real-time credit card fraud detection powered by a LightGBM champion model "
-        "(PR-AUC=0.8770, Recall=0.8571, Precision=0.8485). "
+        "(lgbm_regularized; held-out test PR-AUC=0.7462, Recall=0.8878, Precision=0.4555). "
         "Input: 29 features (V1–V28 PCA-transformed + Amount scaled). "
         "Output: fraud probability and binary prediction."
     ),

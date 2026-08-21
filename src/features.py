@@ -1,9 +1,17 @@
 """Feature engineering and data loading for the fraud detection pipeline.
 
-Pipeline:
-    load_data(path) -> DataFrame
-    preprocess(df)  -> X (DataFrame), y (Series)
-    split_data(X, y) -> X_train, X_test, y_train, y_test
+Pipeline (leak-free order — the split happens BEFORE any statistic is fitted):
+
+    load_data(path)                     -> DataFrame
+    preprocess(df)                      -> X (raw Amount), y
+    split_data(X, y)                    -> train / val / test
+    fit_amount_scaler(X_train)          -> StandardScaler fitted on train only
+    apply_amount_scaler(scaler, X)      -> scaled copy of X
+
+`preprocess()` deliberately does NOT scale. Fitting a scaler on the full frame
+and splitting afterwards leaks test-set statistics into training; the scaler is
+therefore fitted from the training split alone and then applied to val and test.
+See docs/leakage_fix.md.
 """
 
 import logging
@@ -20,6 +28,7 @@ from src.config import (
     RANDOM_STATE,
     TARGET_COL,
     TEST_SIZE,
+    VAL_SIZE,
 )
 
 logger = logging.getLogger(__name__)
@@ -73,25 +82,23 @@ def preprocess(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
 
     Steps:
         1. Drop 'Time' column (seconds since first tx — not informative for baseline).
-        2. Scale 'Amount' with StandardScaler (V1-V28 are already PCA-scaled).
-        3. Separate features (X) and target (y).
+        2. Separate features (X) and target (y).
+
+    `Amount` is returned RAW. Scaling is a fitted transformation and must not be
+    applied before the train/test split — use fit_amount_scaler() on the training
+    split, then apply_amount_scaler() on each split.
 
     Args:
         df: Raw DataFrame from load_data().
 
     Returns:
-        Tuple of (X, y) where X has scaled features and y is the binary target.
+        Tuple of (X, y) where X holds unscaled features and y is the binary target.
     """
     df = df.copy()
 
     # Drop Time — not informative for baseline (seconds since first transaction)
     df = df.drop(columns=["Time"], errors="ignore")
     logger.info("Dropped 'Time' column.")
-
-    # Scale Amount — V1-V28 are already PCA-whitened, only Amount needs scaling
-    scaler = StandardScaler()
-    df[AMOUNT_SCALER_FEATURE] = scaler.fit_transform(df[[AMOUNT_SCALER_FEATURE]])
-    logger.info("Scaled 'Amount' with StandardScaler.")
 
     X = df[FEATURE_COLS]
     y = df[TARGET_COL]
@@ -104,33 +111,81 @@ def split_data(
     X: pd.DataFrame,
     y: pd.Series,
     test_size: float = TEST_SIZE,
+    val_size: float = VAL_SIZE,
     random_state: int = RANDOM_STATE,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
-    """Stratified train/test split preserving fraud ratio.
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, pd.Series]:
+    """Stratified three-way split preserving the fraud ratio in every split.
+
+    The test set is carved out FIRST and never participates in early stopping or
+    model selection. The validation set is then taken from what remains.
 
     Args:
         X: Feature DataFrame.
         y: Target Series.
-        test_size: Fraction for test set (default 0.2).
+        test_size: Fraction of the FULL dataset held out for final reporting.
+        val_size: Fraction of the POST-TEST remainder used for validation.
         random_state: Seed for reproducibility.
 
     Returns:
-        Tuple of (X_train, X_test, y_train, y_test).
+        Tuple of (X_train, X_val, X_test, y_train, y_val, y_test).
     """
-    X_train, X_test, y_train, y_test = train_test_split(
+    # 1. Hold out the test set first — it is touched exactly once, at reporting.
+    X_rest, X_test, y_rest, y_test = train_test_split(
         X,
         y,
         test_size=test_size,
         random_state=random_state,
-        stratify=y,  # keeps fraud ratio equal in train and test
+        stratify=y,
     )
 
-    logger.info(
-        f"Train: {len(X_train):,} samples "
-        f"({y_train.sum():,} fraud, {y_train.sum() / len(y_train) * 100:.4f}%)"
+    # 2. Carve the validation set out of the remainder (early stopping + selection).
+    X_train, X_val, y_train, y_val = train_test_split(
+        X_rest,
+        y_rest,
+        test_size=val_size,
+        random_state=random_state,
+        stratify=y_rest,
     )
+
+    for name, y_split in (("Train", y_train), ("Val  ", y_val), ("Test ", y_test)):
+        logger.info(
+            f"{name}: {len(y_split):,} samples "
+            f"({y_split.sum():,} fraud, {y_split.sum() / len(y_split) * 100:.4f}%)"
+        )
+
+    return X_train, X_val, X_test, y_train, y_val, y_test
+
+
+def fit_amount_scaler(X_train: pd.DataFrame) -> StandardScaler:
+    """Fit the `Amount` StandardScaler on the TRAINING SPLIT ONLY.
+
+    V1–V28 are already PCA-whitened in the source dataset, so `Amount` is the
+    only feature that needs scaling.
+
+    Args:
+        X_train: Training features, with a raw `Amount` column.
+
+    Returns:
+        A StandardScaler fitted on X_train[["Amount"]].
+    """
+    scaler = StandardScaler()
+    scaler.fit(X_train[[AMOUNT_SCALER_FEATURE]])
     logger.info(
-        f"Test:  {len(X_test):,} samples "
-        f"({y_test.sum():,} fraud, {y_test.sum() / len(y_test) * 100:.4f}%)"
+        f"Fitted Amount scaler on TRAIN only: mean={scaler.mean_[0]:.4f} std={scaler.scale_[0]:.4f}"
     )
-    return X_train, X_test, y_train, y_test
+    return scaler
+
+
+def apply_amount_scaler(scaler: StandardScaler, X: pd.DataFrame) -> pd.DataFrame:
+    """Apply a fitted `Amount` scaler to a split, returning a scaled copy.
+
+    Args:
+        scaler: Scaler produced by fit_amount_scaler().
+        X: Features with a raw `Amount` column.
+
+    Returns:
+        A new DataFrame with `Amount` scaled; the input is left untouched.
+    """
+    X = X.copy()
+    X[AMOUNT_SCALER_FEATURE] = scaler.transform(X[[AMOUNT_SCALER_FEATURE]])
+    return X

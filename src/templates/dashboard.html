@@ -1049,7 +1049,7 @@
                             <div class="pipeline-tags">
                                 <span class="pipeline-tag">src/validate.py</span>
                                 <span class="pipeline-tag">Recall ≥ 80%</span>
-                                <span class="pipeline-tag">Champion: lgbm_large (PR-AUC 0.8770)</span>
+                                <span class="pipeline-tag">Champion: lgbm_regularized (val PR-AUC 0.7407 &middot; test 0.7462)</span>
                             </div>
                         </div>
                     </div>
@@ -1074,8 +1074,8 @@
         <div id="tab-benchmark" class="tab-content">
             <div class="card">
                 <div class="card-header">
-                    <div class="card-title">Full Experiment Grid Comparison (Sorted by PR-AUC)</div>
-                    <span style="font-size: 12px; color: var(--text-muted);">Evaluated on 56,962 Test Samples</span>
+                    <div class="card-title">Full Experiment Grid Comparison (ranked by VAL PR-AUC)</div>
+                    <span style="font-size: 12px; color: var(--text-muted);">Selected on 45,569 val rows &middot; reported on 56,962 test rows (98 frauds)</span>
                 </div>
                 <div class="table-responsive">
                     <table class="benchmark-table">
@@ -1083,76 +1083,258 @@
                             <tr>
                                 <th>Run Name</th>
                                 <th>Model Architecture</th>
-                                <th>PR-AUC (Primary)</th>
-                                <th>Recall (≥0.80)</th>
-                                <th>Precision (≥0.50)</th>
-                                <th>F1 Score</th>
-                                <th>Status</th>
+                                <th>val PR-AUC</th>
+                                <th>val Recall (&ge;0.80)</th>
+                                <th>val Precision (&ge;0.50)</th>
+                                <th>test PR-AUC</th>
+                                <th>test TP / FP</th>
+                                <th>Gate</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr class="champion-row">
-                                <td>lgbm_large <span class="champion-badge">Champion @prod</span></td>
-                                <td>LightGBM (leaves=63, lr=0.05)</td>
-                                <td>0.8770</td>
-                                <td>0.8571 (85.7%)</td>
-                                <td>0.8485 (84.9%)</td>
-                                <td>0.8528</td>
+                                <td>lgbm_regularized <span class="champion-badge">Champion @prod</span></td>
+                                <td>LightGBM (leaves=31, min_child=5)</td>
+                                <td>0.7407</td>
+                                <td>0.8354</td>
+                                <td>0.5238</td>
+                                <td>0.7462</td>
+                                <td>87 / 104</td>
                                 <td><span style="color: var(--color-success); font-weight: 700;">Promoted</span></td>
                             </tr>
                             <tr>
-                                <td>lgbm_regularized</td>
-                                <td>LightGBM (leaves=31, min_child=5)</td>
-                                <td>0.8700</td>
-                                <td>0.8469</td>
-                                <td>0.9130</td>
-                                <td>0.8787</td>
-                                <td>Candidate</td>
+                                <td>lgbm_large</td>
+                                <td>LightGBM (leaves=63, lr=0.05)</td>
+                                <td>0.8160</td>
+                                <td>0.7975</td>
+                                <td>0.8289</td>
+                                <td>0.8703</td>
+                                <td>83 / 26</td>
+                                <td><span style="color: var(--color-warning);">Recall &lt; 0.80</span></td>
                             </tr>
                             <tr>
                                 <td>lgbm_default</td>
                                 <td>LightGBM (n=100, depth=6)</td>
-                                <td>0.8657</td>
-                                <td>0.8367</td>
-                                <td>0.9114</td>
-                                <td>0.8725</td>
-                                <td>Candidate</td>
+                                <td>0.8038</td>
+                                <td>0.8228</td>
+                                <td>0.4815</td>
+                                <td>0.8496</td>
+                                <td>87 / 100</td>
+                                <td><span style="color: var(--color-warning);">Precision &lt; 0.50</span></td>
                             </tr>
                             <tr>
                                 <td>xgb_default</td>
                                 <td>XGBoost (n=100, depth=6)</td>
-                                <td>0.8445</td>
-                                <td>0.8163</td>
-                                <td>0.9302</td>
-                                <td>0.8696</td>
-                                <td>Candidate</td>
-                            </tr>
-                            <tr>
-                                <td>xgb_deep</td>
-                                <td>XGBoost (n=200, depth=8)</td>
-                                <td>0.8391</td>
-                                <td>0.7959</td>
-                                <td>0.9286</td>
-                                <td>0.8571</td>
+                                <td>0.7899</td>
+                                <td>0.7848</td>
+                                <td>0.8267</td>
+                                <td>0.8604</td>
+                                <td>81 / 24</td>
                                 <td><span style="color: var(--color-warning);">Recall &lt; 0.80</span></td>
                             </tr>
                             <tr>
                                 <td>xgb_regularized</td>
                                 <td>XGBoost (n=300, sub=0.8)</td>
-                                <td>0.8373</td>
-                                <td>0.7959</td>
-                                <td>0.9070</td>
-                                <td>0.8475</td>
+                                <td>0.7135</td>
+                                <td>0.7848</td>
+                                <td>0.4593</td>
+                                <td>0.7096</td>
+                                <td>84 / 116</td>
+                                <td><span style="color: var(--color-warning);">Recall &amp; Precision</span></td>
+                            </tr>
+                            <tr>
+                                <td>xgb_deep</td>
+                                <td>XGBoost (n=200, depth=8)</td>
+                                <td>0.6831</td>
+                                <td>0.7342</td>
+                                <td>0.5000</td>
+                                <td>0.6932</td>
+                                <td>79 / 91</td>
                                 <td><span style="color: var(--color-warning);">Recall &lt; 0.80</span></td>
                             </tr>
                             <tr>
                                 <td>lr_baseline</td>
                                 <td>Logistic Regression (balanced)</td>
-                                <td>0.7156</td>
-                                <td>0.9184</td>
-                                <td>0.8571</td>
-                                <td>0.8867</td>
-                                <td>Baseline</td>
+                                <td>0.6755</td>
+                                <td>0.8861</td>
+                                <td>0.0591</td>
+                                <td>0.7105</td>
+                                <td>89 / 1379</td>
+                                <td><span style="color: var(--color-warning);">Baseline &mdash; Precision &lt; 0.50</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: MLOps Pipeline Flow -->
+        <div id="tab-pipeline" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">End-to-End MLOps Pipeline Architecture</div>
+                    <span style="font-size: 12px; color: var(--text-muted);">From Kaggle Raw Data to Live Serving</span>
+                </div>
+                <div class="pipeline-flow">
+                    <div class="pipeline-node">
+                        <div class="pipeline-step-badge">1</div>
+                        <div class="pipeline-node-content">
+                            <h3>Data Ingestion & Imbalance Assessment</h3>
+                            <p>Loaded 284,807 credit card transactions. Extreme class imbalance: 492 fraud vs 284,315 legit (~0.173% positive rate).</p>
+                            <div class="pipeline-tags">
+                                <span class="pipeline-tag">data/raw/creditcard.csv</span>
+                                <span class="pipeline-tag">Imbalance: 1:577</span>
+                                <span class="pipeline-tag">Pydantic Validation</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pipeline-node">
+                        <div class="pipeline-step-badge">2</div>
+                        <div class="pipeline-node-content">
+                            <h3>Feature Engineering & Leakage-Free Split</h3>
+                            <p>Scaled transaction Amount with StandardScaler. Dropped non-predictive Time column. Stratified 80/20 train/test split preserving fraud ratio.</p>
+                            <div class="pipeline-tags">
+                                <span class="pipeline-tag">src/features.py</span>
+                                <span class="pipeline-tag">StratifiedSplit (seed=42)</span>
+                                <span class="pipeline-tag">No Data Leakage</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pipeline-node">
+                        <div class="pipeline-step-badge">3</div>
+                        <div class="pipeline-node-content">
+                            <h3>MLflow Experiment Grid (7 Runs Logged)</h3>
+                            <p>Trained Logistic Regression baseline, 3 XGBoost configurations (scale_pos_weight), and 3 LightGBM configurations (class_weight='balanced'). Tracked artifacts and PR curves.</p>
+                            <div class="pipeline-tags">
+                                <span class="pipeline-tag">src/train.py</span>
+                                <span class="pipeline-tag">MLflow 3.x SQLite</span>
+                                <span class="pipeline-tag">PR-AUC Optimization</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pipeline-node">
+                        <div class="pipeline-step-badge">4</div>
+                        <div class="pipeline-node-content">
+                            <h3>Automated Validation Gate & Promotion</h3>
+                            <p>Validation Gate enforces: Recall ≥ 0.80, Precision ≥ 0.50, and PR-AUC ≥ current production model. Champion model promoted to Model Registry alias <code>production</code>.</p>
+                            <div class="pipeline-tags">
+                                <span class="pipeline-tag">src/validate.py</span>
+                                <span class="pipeline-tag">Recall ≥ 80%</span>
+                                <span class="pipeline-tag">Champion: lgbm_regularized (val PR-AUC 0.7407 &middot; test 0.7462)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pipeline-node">
+                        <div class="pipeline-step-badge">5</div>
+                        <div class="pipeline-node-content">
+                            <h3>Containerization & Cloud Deployment</h3>
+                            <p>FastAPI serving packaged with Docker (libgomp1 OpenMP, uv package manager). CI verified with 61 pytest tests. Model loaded dynamically from Hugging Face Hub.</p>
+                            <div class="pipeline-tags">
+                                <span class="pipeline-tag">FastAPI v1.0.0</span>
+                                <span class="pipeline-tag">GitHub Actions CI</span>
+                                <span class="pipeline-tag">Render Cloud Live</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 4: Model Benchmarks -->
+        <div id="tab-benchmark" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Full Experiment Grid Comparison (ranked by VAL PR-AUC)</div>
+                    <span style="font-size: 12px; color: var(--text-muted);">Selected on 45,569 val rows &middot; reported on 56,962 test rows (98 frauds)</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="benchmark-table">
+                        <thead>
+                            <tr>
+                                <th>Run Name</th>
+                                <th>Model Architecture</th>
+                                <th>val PR-AUC</th>
+                                <th>val Recall (&ge;0.80)</th>
+                                <th>val Precision (&ge;0.50)</th>
+                                <th>test PR-AUC</th>
+                                <th>test TP / FP</th>
+                                <th>Gate</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="champion-row">
+                                <td>lgbm_regularized <span class="champion-badge">Champion @prod</span></td>
+                                <td>LightGBM (leaves=31, min_child=5)</td>
+                                <td>0.7407</td>
+                                <td>0.8354</td>
+                                <td>0.5238</td>
+                                <td>0.7462</td>
+                                <td>87 / 104</td>
+                                <td><span style="color: var(--color-success); font-weight: 700;">Promoted</span></td>
+                            </tr>
+                            <tr>
+                                <td>lgbm_large</td>
+                                <td>LightGBM (leaves=63, lr=0.05)</td>
+                                <td>0.8160</td>
+                                <td>0.7975</td>
+                                <td>0.8289</td>
+                                <td>0.8703</td>
+                                <td>83 / 26</td>
+                                <td><span style="color: var(--color-warning);">Recall &lt; 0.80</span></td>
+                            </tr>
+                            <tr>
+                                <td>lgbm_default</td>
+                                <td>LightGBM (n=100, depth=6)</td>
+                                <td>0.8038</td>
+                                <td>0.8228</td>
+                                <td>0.4815</td>
+                                <td>0.8496</td>
+                                <td>87 / 100</td>
+                                <td><span style="color: var(--color-warning);">Precision &lt; 0.50</span></td>
+                            </tr>
+                            <tr>
+                                <td>xgb_default</td>
+                                <td>XGBoost (n=100, depth=6)</td>
+                                <td>0.7899</td>
+                                <td>0.7848</td>
+                                <td>0.8267</td>
+                                <td>0.8604</td>
+                                <td>81 / 24</td>
+                                <td><span style="color: var(--color-warning);">Recall &lt; 0.80</span></td>
+                            </tr>
+                            <tr>
+                                <td>xgb_regularized</td>
+                                <td>XGBoost (n=300, sub=0.8)</td>
+                                <td>0.7135</td>
+                                <td>0.7848</td>
+                                <td>0.4593</td>
+                                <td>0.7096</td>
+                                <td>84 / 116</td>
+                                <td><span style="color: var(--color-warning);">Recall &amp; Precision</span></td>
+                            </tr>
+                            <tr>
+                                <td>xgb_deep</td>
+                                <td>XGBoost (n=200, depth=8)</td>
+                                <td>0.6831</td>
+                                <td>0.7342</td>
+                                <td>0.5000</td>
+                                <td>0.6932</td>
+                                <td>79 / 91</td>
+                                <td><span style="color: var(--color-warning);">Recall &lt; 0.80</span></td>
+                            </tr>
+                            <tr>
+                                <td>lr_baseline</td>
+                                <td>Logistic Regression (balanced)</td>
+                                <td>0.6755</td>
+                                <td>0.8861</td>
+                                <td>0.0591</td>
+                                <td>0.7105</td>
+                                <td>89 / 1379</td>
+                                <td><span style="color: var(--color-warning);">Baseline &mdash; Precision &lt; 0.50</span></td>
                             </tr>
                         </tbody>
                     </table>

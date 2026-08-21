@@ -5,10 +5,18 @@ Workflow:
     2. Compare new model metrics vs production.
     3. Promote if new model is strictly better (or first deployment).
 
-Decision logic:
+Decision logic (UNCHANGED — the comparison is still against the model currently
+holding the 'production' alias, never against a fixed baseline):
     - Model MUST meet minimum thresholds: Recall >= 0.80, Precision >= 0.50
     - Model MUST have PR-AUC >= current production PR-AUC (no regression)
     - If no production model exists → FIRST_DEPLOYMENT (auto-promote)
+
+All three checks read VALIDATION metrics (`val_*`). The test split is never
+consulted for a promotion decision — see docs/leakage_fix.md. Runs recorded
+under the older protocol logged only bare `pr_auc`, which was computed on the
+test set after early-stopping on that same set; those numbers are not comparable
+with `val_pr_auc`, so a production model lacking `val_pr_auc` is reported as a
+protocol change and handled as a first deployment rather than silently compared.
 
 Usage (standalone):
     uv run python src/validate.py --run-id <mlflow_run_id>
@@ -35,6 +43,10 @@ from src.config import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Metric family the gate reads. Promotion decisions are made on validation
+# metrics only; `test_*` exists for reporting and must not drive any branch.
+VAL_METRIC_PREFIX = "val_"
 
 
 # ---------------------------------------------------------------------------
@@ -75,14 +87,16 @@ class ValidationResult:
 
 
 def _get_production_metrics(client: MlflowClient, model_name: str) -> dict[str, float] | None:
-    """Fetch metrics of the model currently tagged with alias 'production'.
+    """Fetch VALIDATION metrics of the model currently tagged with alias 'production'.
 
     Args:
         client: MLflow tracking client.
         model_name: Registered model name in MLflow Registry.
 
     Returns:
-        Dict with pr_auc, recall, precision, f1, roc_auc or None if not found.
+        Dict with pr_auc, recall, precision, f1, roc_auc (read from the run's
+        `val_*` metrics), or None if there is no production model, or if it was
+        trained under a protocol that did not record validation metrics.
     """
     try:
         prod_version = client.get_model_version_by_alias(model_name, "production")
@@ -102,16 +116,21 @@ def _get_production_metrics(client: MlflowClient, model_name: str) -> dict[str, 
         logger.warning(f"Could not load production run metrics: {exc}")
         return None
 
-    if "pr_auc" not in metrics:
-        logger.warning("Production run has no 'pr_auc' metric logged.")
+    if VAL_METRIC_PREFIX + "pr_auc" not in metrics:
+        # Pre-leak-fix run: its bare `pr_auc` came from the test set that also
+        # drove early stopping, so it is not on the same scale as val_pr_auc.
+        # Comparing them would be meaningless in either direction, so the
+        # baseline is reset rather than fudged.
+        logger.warning(
+            "Production run has no 'val_pr_auc' — it predates the leak-free "
+            "evaluation protocol. Its metrics are not comparable; treating this "
+            "as a first deployment under the new protocol."
+        )
         return None
 
     return {
-        "pr_auc": metrics.get("pr_auc", 0.0),
-        "recall": metrics.get("recall", 0.0),
-        "precision": metrics.get("precision", 0.0),
-        "f1": metrics.get("f1", 0.0),
-        "roc_auc": metrics.get("roc_auc", 0.0),
+        key: metrics.get(VAL_METRIC_PREFIX + key, 0.0)
+        for key in ("pr_auc", "recall", "precision", "f1", "roc_auc")
     }
 
 

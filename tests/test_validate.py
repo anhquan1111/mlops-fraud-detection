@@ -35,12 +35,17 @@ _PROD_METRICS = {
 }
 
 
-def _make_mock_client(prod_metrics: dict | None = None) -> MagicMock:
+def _make_mock_client(
+    prod_metrics: dict | None = None,
+    raw_metric_keys: bool = False,
+) -> MagicMock:
     """Build a mock MlflowClient.
 
     Args:
         prod_metrics: Metrics for the production model, or None to simulate
                       no existing production model.
+        raw_metric_keys: Store prod_metrics under bare keys instead of `val_*`,
+                      simulating a run from before the leak-free protocol.
     """
     client = MagicMock()
 
@@ -55,9 +60,14 @@ def _make_mock_client(prod_metrics: dict | None = None) -> MagicMock:
         mock_version.run_id = "fake-run-id"
         client.get_model_version_by_alias.return_value = mock_version
 
-        # Return a fake run with the given metrics
+        # Return a fake run with the given metrics. A real leak-free run stores
+        # them under `val_*`; the gate reads that family so that promotion is
+        # never decided on test-set numbers. Callers of run_validation_gate()
+        # still pass plain keys — the prefix is a storage detail of the run.
         mock_run = MagicMock()
-        mock_run.data.metrics = prod_metrics
+        mock_run.data.metrics = (
+            prod_metrics if raw_metric_keys else {f"val_{k}": v for k, v in prod_metrics.items()}
+        )
         client.get_run.return_value = mock_run
 
     return client
@@ -272,3 +282,64 @@ class TestRejection:
         reason_lower = result.reason.lower()
         assert "recall" in reason_lower
         assert "precision" in reason_lower
+
+
+# ---------------------------------------------------------------------------
+# Evaluation-protocol guard
+# ---------------------------------------------------------------------------
+
+
+class TestProtocolChange:
+    """A production model from before the leak-free rewrite is not comparable.
+
+    Its bare `pr_auc` was measured on a test set that had already driven early
+    stopping, so it sits on a different (inflated) scale from `val_pr_auc`.
+    Comparing the two would either block every good candidate or wave through a
+    bad one, depending on which way the inflation ran. The gate refuses the
+    comparison and resets the baseline instead.
+    """
+
+    def test_legacy_production_run_is_treated_as_first_deployment(self) -> None:
+        client = _make_mock_client(prod_metrics=_PROD_METRICS, raw_metric_keys=True)
+
+        with patch("src.validate.mlflow.register_model") as mock_register:
+            mock_register.return_value = MagicMock(version="1")
+            result = run_validation_gate(
+                run_id="new-run-id",
+                new_metrics=_GOOD_METRICS,
+                client=client,
+                promote_on_pass=True,
+            )
+
+        assert result.status == ValidationStatus.FIRST_DEPLOYMENT
+        assert result.prod_metrics is None
+
+    def test_legacy_run_does_not_block_a_lower_scoring_candidate(self) -> None:
+        """A candidate below the legacy number must not be rejected on it."""
+        client = _make_mock_client(prod_metrics=_PROD_METRICS, raw_metric_keys=True)
+        below_legacy = {**_GOOD_METRICS, "pr_auc": 0.60}  # under prod's 0.85
+
+        with patch("src.validate.mlflow.register_model") as mock_register:
+            mock_register.return_value = MagicMock(version="1")
+            result = run_validation_gate(
+                run_id="new-run-id",
+                new_metrics=below_legacy,
+                client=client,
+                promote_on_pass=True,
+            )
+
+        assert result.status == ValidationStatus.FIRST_DEPLOYMENT
+
+    def test_minimum_thresholds_still_apply_under_protocol_change(self) -> None:
+        """Resetting the baseline must not disable the hard recall/precision floor."""
+        client = _make_mock_client(prod_metrics=_PROD_METRICS, raw_metric_keys=True)
+        weak = {**_GOOD_METRICS, "recall": MIN_RECALL - 0.2, "precision": MIN_PRECISION - 0.2}
+
+        result = run_validation_gate(
+            run_id="new-run-id",
+            new_metrics=weak,
+            client=client,
+            promote_on_pass=False,
+        )
+
+        assert result.status == ValidationStatus.REJECTED

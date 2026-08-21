@@ -49,11 +49,35 @@ FEATURE_COLS: list[str] = NUMERIC_FEATURES  # Time is dropped in preprocessing
 
 AMOUNT_SCALER_FEATURE = "Amount"  # only feature that needs scaling in baseline
 
+# StandardScaler statistics for `Amount`, fitted on the TRAINING SPLIT ONLY
+# (64% of the data, RANDOM_STATE=42). src/api.py applies these at serve time
+# because the deployed artifact is the bare estimator, not a full pipeline.
+#
+# ⚠️ These MUST be regenerated whenever the split or RANDOM_STATE changes:
+#     uv run python src/train.py   (prints the fitted values)
+# tests/test_features.py asserts they match the scaler fitted from the raw CSV
+# when it is available, so drift here fails the test suite rather than silently
+# skewing production scores.
+
+AMOUNT_MEAN: float = 87.9702
+AMOUNT_STD: float = 245.5762
+
 # ---------------------------------------------------------------------------
-# Train / test split
+# Train / validation / test split
 # ---------------------------------------------------------------------------
+# Three-way split, stratified at every step, so that the test set is touched
+# exactly once — at final reporting.
+#
+#   test  = TEST_SIZE of the full dataset                  -> 20%
+#   val   = VAL_SIZE of what remains after test is removed -> 0.2 * 0.8 = 16%
+#   train = the rest                                       -> 64%
+#
+# Early stopping and champion selection both run on val. Using test for either
+# leaks the test set into model selection and inflates the reported metrics —
+# see docs/leakage_fix.md.
 
 TEST_SIZE: float = 0.2
+VAL_SIZE: float = 0.2  # fraction of the post-test remainder, NOT of the full set
 RANDOM_STATE: int = 42
 
 # ---------------------------------------------------------------------------

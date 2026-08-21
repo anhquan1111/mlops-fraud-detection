@@ -1,8 +1,9 @@
 """Auto-select best model from MLflow experiment and register to Model Registry.
 
-Selection criteria:
-    1. Filter: recall >= MIN_RECALL AND precision >= MIN_PRECISION
-    2. Sort by: pr_auc descending
+Selection criteria (all read VALIDATION metrics — the test split never
+influences which model is chosen; see docs/leakage_fix.md):
+    1. Filter: val_recall >= MIN_RECALL AND val_precision >= MIN_PRECISION
+    2. Sort by: val_pr_auc descending
     3. Run the validation gate (src/validate.py) on the winner — it re-checks the
        minimum thresholds AND blocks any PR-AUC regression against the model
        currently holding the 'production' alias.
@@ -57,7 +58,7 @@ def get_all_runs(client: MlflowClient, experiment_name: str) -> list[dict]:
     runs = client.search_runs(
         experiment_ids=[experiment.experiment_id],
         filter_string="status = 'FINISHED'",
-        order_by=["metrics.pr_auc DESC"],
+        order_by=["metrics.val_pr_auc DESC"],
     )
 
     results = []
@@ -66,25 +67,24 @@ def get_all_runs(client: MlflowClient, experiment_name: str) -> list[dict]:
         tags = run.data.tags
         params = run.data.params
 
-        # Skip runs that don't have pr_auc logged (e.g., incomplete runs)
-        if "pr_auc" not in metrics:
+        # Only runs from the leak-free protocol carry val_* metrics. Older runs
+        # scored on a test set that had already driven early stopping, so they
+        # are not comparable and are excluded from selection entirely.
+        if "val_pr_auc" not in metrics:
             continue
 
-        results.append(
-            {
-                "run_id": run.info.run_id,
-                "run_name": run.info.run_name or "unnamed",
-                "model_type": tags.get("model_type", "unknown"),
-                "purpose": tags.get("purpose", "unknown"),
-                "pr_auc": metrics.get("pr_auc", 0.0),
-                "recall": metrics.get("recall", 0.0),
-                "precision": metrics.get("precision", 0.0),
-                "f1": metrics.get("f1", 0.0),
-                "roc_auc": metrics.get("roc_auc", 0.0),
-                "n_estimators": params.get("n_estimators", "N/A"),
-                "threshold": metrics.get("threshold", 0.5),
-            }
-        )
+        row = {
+            "run_id": run.info.run_id,
+            "run_name": run.info.run_name or "unnamed",
+            "model_type": tags.get("model_type", "unknown"),
+            "purpose": tags.get("purpose", "unknown"),
+            "n_estimators": params.get("n_estimators", "N/A"),
+            "threshold": metrics.get("threshold", 0.5),
+        }
+        for split in ("val", "test"):
+            for key in ("pr_auc", "recall", "precision", "f1", "roc_auc", "tp", "fp", "fn"):
+                row[f"{split}_{key}"] = metrics.get(f"{split}_{key}", 0.0)
+        results.append(row)
 
     return results
 
@@ -96,25 +96,27 @@ def print_comparison_table(results: list[dict], best_run_id: str | None = None) 
         results: List of run dicts from get_all_runs().
         best_run_id: run_id of the selected best model (highlighted).
     """
-    print("\n" + "=" * 90)
-    print("  ALL RUNS -- fraud-detection experiment (sorted by PR-AUC)")
-    print("=" * 90)
+    print("\n" + "=" * 104)
+    print("  ALL RUNS -- fraud-detection experiment (ranked by VAL PR-AUC)")
+    print("  Gate decisions use VAL only. TEST columns are reported, never selected on.")
+    print("=" * 104)
     print(
-        f"  {'Run Name':<24} {'Model Type':<22} {'PR-AUC':>7} "
-        f"{'Recall':>7} {'Prec':>7} {'F1':>7}  {'Status'}"
+        f"  {'Run Name':<20} {'Model Type':<20} "
+        f"{'valPR':>6} {'valRec':>7} {'valPrec':>8} "
+        f"{'tstPR':>6} {'tstRec':>7} {'tstPrec':>8}  {'Status'}"
     )
-    print(f"  {'-' * 82}")
+    print(f"  {'-' * 100}")
 
     for r in results:
-        recall_ok = r["recall"] >= MIN_RECALL
-        prec_ok = r["precision"] >= MIN_PRECISION
+        recall_ok = r["val_recall"] >= MIN_RECALL
+        prec_ok = r["val_precision"] >= MIN_PRECISION
         qualifies = recall_ok and prec_ok
 
         status_parts = []
         if not recall_ok:
-            status_parts.append(f"Recall<({r['recall']:.3f}<{MIN_RECALL})")
+            status_parts.append(f"Recall<({r['val_recall']:.3f}<{MIN_RECALL})")
         if not prec_ok:
-            status_parts.append(f"Prec<({r['precision']:.3f}<{MIN_PRECISION})")
+            status_parts.append(f"Prec<({r['val_precision']:.3f}<{MIN_PRECISION})")
         if qualifies:
             status_parts.append("[PASS]")
         if r["run_id"] == best_run_id:
@@ -123,12 +125,13 @@ def print_comparison_table(results: list[dict], best_run_id: str | None = None) 
         status = " | ".join(status_parts) if status_parts else "-"
 
         print(
-            f"  {r['run_name']:<24} {r['model_type']:<22} "
-            f"{r['pr_auc']:>7.4f} {r['recall']:>7.4f} "
-            f"{r['precision']:>7.4f} {r['f1']:>7.4f}  {status}"
+            f"  {r['run_name']:<20} {r['model_type']:<20} "
+            f"{r['val_pr_auc']:>6.4f} {r['val_recall']:>7.4f} {r['val_precision']:>8.4f} "
+            f"{r['test_pr_auc']:>6.4f} {r['test_recall']:>7.4f} {r['test_precision']:>8.4f}"
+            f"  {status}"
         )
 
-    print("=" * 90)
+    print("=" * 104)
     print()
 
 
@@ -163,9 +166,12 @@ def register_best_model(client: MlflowClient, best_run: dict) -> tuple[str, str]
     # Update description
     description = (
         f"Model: {best_run['model_type']} | Run: {best_run['run_name']} | "
-        f"PR-AUC={best_run['pr_auc']:.4f} | Recall={best_run['recall']:.4f} | "
-        f"Precision={best_run['precision']:.4f} | F1={best_run['f1']:.4f} | "
-        f"Session: 4"
+        f"Selected on VAL: PR-AUC={best_run['val_pr_auc']:.4f} "
+        f"Recall={best_run['val_recall']:.4f} Precision={best_run['val_precision']:.4f} | "
+        f"Held-out TEST: PR-AUC={best_run['test_pr_auc']:.4f} "
+        f"Recall={best_run['test_recall']:.4f} Precision={best_run['test_precision']:.4f} "
+        f"(TP={int(best_run['test_tp'])} FP={int(best_run['test_fp'])}) | "
+        "protocol=leakfree_v2"
     )
     client.update_model_version(
         name=REGISTERED_MODEL_NAME,
@@ -209,7 +215,7 @@ def select_and_register(dry_run: bool = False) -> None:
     # 2. Filter runs that meet minimum thresholds
     # ------------------------------------------------------------------
     qualifying = [
-        r for r in all_runs if r["recall"] >= MIN_RECALL and r["precision"] >= MIN_PRECISION
+        r for r in all_runs if r["val_recall"] >= MIN_RECALL and r["val_precision"] >= MIN_PRECISION
     ]
 
     if not qualifying:
@@ -225,11 +231,11 @@ def select_and_register(dry_run: bool = False) -> None:
     # ------------------------------------------------------------------
     # 3. Select best by PR-AUC
     # ------------------------------------------------------------------
-    best = max(qualifying, key=lambda r: r["pr_auc"])
+    best = max(qualifying, key=lambda r: r["val_pr_auc"])
     logger.info(
-        f"Best model: '{best['run_name']}' | {best['model_type']} | "
-        f"PR-AUC={best['pr_auc']:.4f} | Recall={best['recall']:.4f} | "
-        f"Precision={best['precision']:.4f}"
+        f"Best model (by val): '{best['run_name']}' | {best['model_type']} | "
+        f"val PR-AUC={best['val_pr_auc']:.4f} | val Recall={best['val_recall']:.4f} | "
+        f"val Precision={best['val_precision']:.4f}"
     )
 
     # Print comparison table (before registering)
@@ -240,7 +246,7 @@ def select_and_register(dry_run: bool = False) -> None:
     #    promote_on_pass=False: the gate decides, register_best_model() below
     #    performs the registration so the version description is filled in.
     # ------------------------------------------------------------------
-    gate_metrics = {k: best[k] for k in ("pr_auc", "recall", "precision", "f1", "roc_auc")}
+    gate_metrics = {k: best[f"val_{k}"] for k in ("pr_auc", "recall", "precision", "f1", "roc_auc")}
     gate_result = run_validation_gate(
         run_id=best["run_id"],
         new_metrics=gate_metrics,
@@ -274,10 +280,20 @@ def select_and_register(dry_run: bool = False) -> None:
     print("  Alias         : production")
     print(f"  Model type    : {best['model_type']}")
     print(f"  Run name      : {best['run_name']}")
-    print(f"  PR-AUC        : {best['pr_auc']:.4f}")
-    print(f"  Recall        : {best['recall']:.4f}  (target >= {MIN_RECALL})")
-    print(f"  Precision     : {best['precision']:.4f}  (target >= {MIN_PRECISION})")
-    print(f"  F1            : {best['f1']:.4f}")
+    print("  -- selected on VALIDATION --")
+    print(f"  val PR-AUC    : {best['val_pr_auc']:.4f}")
+    print(f"  val Recall    : {best['val_recall']:.4f}  (target >= {MIN_RECALL})")
+    print(f"  val Precision : {best['val_precision']:.4f}  (target >= {MIN_PRECISION})")
+    print(f"  val F1        : {best['val_f1']:.4f}")
+    print("  -- held-out TEST (reported once, never selected on) --")
+    print(f"  test PR-AUC   : {best['test_pr_auc']:.4f}")
+    print(f"  test Recall   : {best['test_recall']:.4f}")
+    print(f"  test Precision: {best['test_precision']:.4f}")
+    print(f"  test F1       : {best['test_f1']:.4f}")
+    print(
+        f"  test TP/FP/FN : {int(best['test_tp'])} / "
+        f"{int(best['test_fp'])} / {int(best['test_fn'])}"
+    )
     print("=" * 60)
     print()
     print("  Load in API with:")

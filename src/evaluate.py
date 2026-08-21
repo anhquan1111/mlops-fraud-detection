@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import (
     average_precision_score,
+    confusion_matrix,
     f1_score,
     precision_recall_curve,
     precision_score,
@@ -52,6 +53,8 @@ def evaluate_model(
     pr_auc = average_precision_score(y_test, y_proba)
     roc_auc = roc_auc_score(y_test, y_proba)
 
+    tn, fp, fn, tp = confusion_matrix(y_test, y_pred, labels=[0, 1]).ravel()
+
     metrics = {
         "precision": round(precision, 4),
         "recall": round(recall, 4),
@@ -59,6 +62,12 @@ def evaluate_model(
         "pr_auc": round(pr_auc, 4),
         "roc_auc": round(roc_auc, 4),
         "threshold": threshold,
+        # Absolute counts — the only form in which these metrics are actionable
+        # for an operations team ("15 false alarms", not "precision 0.85").
+        "tp": int(tp),
+        "fp": int(fp),
+        "fn": int(fn),
+        "tn": int(tn),
     }
 
     return metrics

@@ -9,7 +9,7 @@
 | Field | Value |
 |-------|-------|
 | **Model name** | `fraud-detection-model` |
-| **Champion variant** | `lgbm_large` |
+| **Champion variant** | `lgbm_regularized` |
 | **Algorithm** | LightGBM (Gradient Boosting Decision Trees) |
 | **MLflow alias** | `production` |
 | **Registered model** | `fraud-detection-model@production` |
@@ -18,22 +18,29 @@
 | **Serving** | FastAPI + uvicorn · Docker |
 | **Version** | 1.0.0 |
 
-### Champion Hyperparameters (`lgbm_large`)
+### Champion Hyperparameters (`lgbm_regularized`)
 
 ```python
 {
     "n_estimators": 300,
     "max_depth": -1,          # no limit (LGBM default)
     "learning_rate": 0.05,
-    "num_leaves": 63,
-    "subsample": 0.9,
+    "num_leaves": 31,
+    "subsample": 0.8,
     "colsample_bytree": 0.8,
+    "min_child_samples": 5,          # lower = less regularization, better for rare class
     "class_weight": "balanced",      # imbalance handling
     "metric": "average_precision",   # PR-AUC equivalent
-    "early_stopping_rounds": 30,
+    "early_stopping_rounds": 30,     # watched on the VALIDATION split
     "random_state": 42,
 }
 ```
+
+Stopped at iteration **74** of 300, chosen on validation.
+
+> Note: `subsample` has no effect in LightGBM unless `subsample_freq > 0`, which is not set here.
+> It is left in place so the grid stays comparable with the XGBoost configurations, but bagging is
+> effectively disabled for every LightGBM run in this project.
 
 ---
 
@@ -92,78 +99,91 @@ Real-time detection of fraudulent credit card transactions to flag suspicious ac
 
 ## 4. Evaluation Results
 
-### Primary Metrics (Test Set — 56,962 samples)
+### Evaluation Protocol
 
-> **Business thresholds** (from AGENTS.md): Recall ≥ 0.80 · Precision ≥ 0.50
+Stratified **64 / 16 / 20** train / validation / test split (`random_state=42`), test carved out
+first. Early stopping, champion selection and the validation gate all read the **validation**
+split; the **test** split (56,962 rows, **98 frauds**) is scored once per run for reporting and
+influences no decision. Before 2026-08-21 the pipeline early-stopped on the test set and fitted
+the `Amount` scaler before splitting — see [`leakage_fix.md`](leakage_fix.md).
 
-| Model | PR-AUC | Recall | Precision | F1-score | ROC-AUC | Gate |
-|-------|--------|--------|-----------|----------|---------|------|
-| Logistic Regression (baseline) | 0.7156 | 0.9184 | 0.0588 | 0.1105 | 0.9714 | ❌ precision |
-| XGBoost default | 0.8707 | 0.8367 | 0.7664 | 0.8000 | 0.9697 | ✅ |
-| XGBoost deep | 0.7001 | 0.8367 | 0.4184 | 0.5578 | 0.9596 | ❌ precision |
-| XGBoost regularized | 0.7139 | 0.8673 | 0.3571 | 0.5060 | 0.9814 | ❌ precision |
-| LightGBM default | 0.8757 | 0.8878 | 0.6493 | 0.7500 | 0.9737 | ✅ |
-| LightGBM regularized | 0.7440 | 0.8878 | 0.4065 | 0.5577 | 0.9695 | ❌ precision |
-| **LightGBM large** ⭐ | **0.8770** | **0.8571** | **0.8485** | **0.8528** | **0.9786** | ✅ **champion** |
+### Primary Metrics — all 7 runs
 
-> All figures are read straight from the MLflow experiment `fraud-detection` (latest full sweep).
-> Note that **ROC-AUC is high for every run, including the ones the gate rejects** — `xgb_regularized`
-> has the *best* ROC-AUC (0.9814) and the *worst* precision (0.3571). That divergence is the
-> single clearest argument in this project for ranking on PR-AUC rather than ROC-AUC.
+> **Business thresholds** (from AGENTS.md): Recall ≥ 0.80 · Precision ≥ 0.50, evaluated on **val**.
 
-### Champion Model vs Baseline
+| Run | val PR-AUC | val Recall | val Prec | test PR-AUC | test Recall | test Prec | test F1 | TP | FP | FN | Gate |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `lgbm_large` | 0.8160 | 0.7975 | 0.8289 | 0.8703 | 0.8469 | 0.7615 | 0.8019 | 83 | 26 | 15 | ❌ recall |
+| `lgbm_default` | 0.8038 | 0.8228 | 0.4815 | 0.8496 | 0.8878 | 0.4652 | 0.6105 | 87 | 100 | 11 | ❌ precision |
+| `xgb_default` | 0.7899 | 0.7848 | 0.8267 | 0.8604 | 0.8265 | 0.7714 | 0.7980 | 81 | 24 | 17 | ❌ recall |
+| **`lgbm_regularized`** ⭐ | **0.7407** | **0.8354** | **0.5238** | 0.7462 | 0.8878 | 0.4555 | 0.6021 | 87 | 104 | 11 | ✅ **champion** |
+| `xgb_regularized` | 0.7135 | 0.7848 | 0.4593 | 0.7096 | 0.8571 | 0.4200 | 0.5638 | 84 | 116 | 14 | ❌ both |
+| `xgb_deep` | 0.6831 | 0.7342 | 0.5000 | 0.6932 | 0.8061 | 0.4647 | 0.5896 | 79 | 91 | 19 | ❌ recall |
+| Logistic Regression | 0.6755 | 0.8861 | 0.0591 | 0.7105 | 0.9082 | 0.0606 | 0.1137 | 89 | 1379 | 9 | ❌ precision |
 
-| Metric | Logistic Regression | LightGBM large | Δ Improvement |
+The gate rejects **6 of 7** runs. Note that **ROC-AUC would rank these very differently** — every
+run here scores above 0.95 on ROC-AUC, including the Logistic Regression that raises 1,379 false
+alarms to catch 89 frauds. That divergence is the clearest argument in this project for ranking on
+PR-AUC rather than ROC-AUC.
+
+### Champion vs Baseline (held-out test)
+
+| Metric | Logistic Regression | `lgbm_regularized` | Δ |
 |--------|--------------------|--------------------|--------------|
-| PR-AUC | 0.7156 | **0.8770** | +22.6% 📈 |
-| Recall | 0.9184 | 0.8571 | −6.7% (6 fewer frauds caught) |
-| Precision | 0.0588 | **0.8485** | **+14.4×** |
-| F1-score | 0.1105 | **0.8528** | **+7.7×** |
+| PR-AUC | 0.7105 | **0.7462** | +0.0357 (+5.0%) |
+| Recall | 0.9082 | 0.8878 | −0.0204 (2 fewer frauds caught) |
+| Precision | 0.0606 | **0.4555** | **+7.5×** |
+| F1 | 0.1137 | **0.6021** | **+5.3×** |
+| TP / FP | 89 / 1,379 | 87 / **104** | **−1,275 false alarms** |
 
-> **Note on the Recall trade-off**: the baseline LR does catch 6 more frauds (90 vs 84 of 98), but
-> it does so by flagging roughly **1,440 legitimate transactions** as fraud — precision 0.0588 means
-> only about 1 alert in 17 is real. The champion gives up those 6 frauds to cut false alarms to
-> ~15. At any realistic review capacity the LR baseline is unusable, which is precisely why the
-> validation gate enforces a precision floor alongside recall.
+The baseline catches 2 more frauds and raises **thirteen times** as many false alarms doing it.
+At any realistic review capacity it is unusable, which is why the gate's precision floor rejects
+it automatically.
 
-### Why not `lgbm_default`?
+### Why not `lgbm_large`?
 
-`lgbm_default` has **higher recall** (0.8878 vs 0.8571 — 87 frauds caught vs 84) and a PR-AUC only
-0.0013 behind. It was not chosen because its precision is 0.6493 vs 0.8485: catching 3 more frauds
-costs roughly **32 extra false alarms**. Both models clear the gate, so this is a business
-trade-off rather than a technical one — with a larger review team, `lgbm_default` would be the
-defensible pick.
+`lgbm_large` has the best test numbers in the table (PR-AUC 0.8703, precision 0.7615, 26 false
+positives) but is **rejected by the gate**: its validation recall is 0.7975 against a required
+0.80 — short by 0.0025, roughly one fraud out of the 79 in the validation split. Selecting it
+anyway would mean overriding the gate on the basis of test numbers, which is precisely the
+selection leak the pipeline was rewritten to remove. The honest reading is that the thresholds
+themselves need re-deriving from real review capacity; see §6 and `leakage_fix.md` §5.
 
 ### Decision Threshold Analysis
 
 Measured on the held-out test set (56,962 transactions, **98 frauds**) with the registered
-champion. These are actual sweep results, not estimates:
+champion `lgbm_regularized`. Actual sweep results, not estimates:
 
 | Threshold | Recall | Precision | F1 | TP | FP | FN | Use case |
 |-----------|--------|-----------|-----|----|----|----|----------|
-| 0.1 | 0.8776 | 0.7107 | 0.7854 | 86 | 35 | 12 | Max sensitivity |
-| 0.2 | 0.8673 | 0.7798 | 0.8213 | 85 | 24 | 13 | |
-| 0.3 | 0.8673 | 0.8019 | 0.8333 | 85 | 21 | 13 | High sensitivity |
-| 0.4 | 0.8571 | 0.8317 | 0.8442 | 84 | 17 | 14 | |
-| **0.5** (deployed) | **0.8571** | **0.8485** | **0.8528** | **84** | **15** | **14** | **Neutral default** |
-| 0.6 | 0.8469 | 0.8737 | **0.8601** | 83 | 12 | 15 | Best F1 |
-| 0.7 | 0.8469 | 0.8737 | 0.8601 | 83 | 12 | 15 | High precision |
-| 0.8 | 0.8265 | 0.8901 | 0.8571 | 81 | 10 | 17 | |
-| 0.9 | 0.8163 | 0.8889 | 0.8511 | 80 | 10 | 18 | Max precision |
+| 0.1 | 0.9184 | 0.1100 | 0.1965 | 90 | 728 | 8 | Unusable — 1 alert in 9 is real |
+| 0.2 | 0.8980 | 0.2085 | 0.3385 | 88 | 334 | 10 | |
+| 0.3 | 0.8878 | 0.2979 | 0.4462 | 87 | 205 | 11 | |
+| 0.4 | 0.8878 | 0.3718 | 0.5241 | 87 | 147 | 11 | |
+| **0.5** (deployed) | **0.8878** | **0.4555** | **0.6021** | **87** | **104** | **11** | **Neutral default** |
+| 0.6 | 0.8878 | 0.5472 | 0.6770 | 87 | 72 | 11 | Clears the 0.50 precision floor |
+| 0.7 | 0.8878 | 0.6259 | 0.7342 | 87 | 52 | 11 | **Same recall, half the false alarms** |
+| 0.8 | 0.8673 | 0.7025 | 0.7763 | 85 | 36 | 13 | High precision |
+| 0.9 | 0.8265 | 0.7570 | 0.7902 | 81 | 26 | 17 | Max precision |
 
-Two things worth stating plainly:
+Three things worth stating plainly:
 
-1. **The curve is remarkably flat.** Between thresholds 0.1 and 0.9, recall moves only from 0.878
-   to 0.816 and false positives from 35 to 10. The model separates the classes well enough that
-   threshold choice is a second-order decision here — which is why 0.5 was kept rather than tuned.
-2. **0.5 is not the F1 optimum** — 0.6 is (0.8601 vs 0.8528). 0.5 is retained deliberately as a
-   neutral default: picking a threshold means pricing a missed fraud against an analyst's review
-   time, and that is a business input this project does not have. See §"Known Limitations".
+1. **Recall is completely flat from 0.3 to 0.7** at 0.8878 — the same 87 frauds — while false
+   positives fall from 205 to 52. Between 0.5 and 0.7 this model gives up *nothing* and halves the
+   review workload twice over. The deployed default of 0.5 is not where this model belongs.
+2. **0.5 does not clear the project's own precision floor on test** (0.4555 < 0.50), even though
+   it cleared it on validation (0.5238). Threshold 0.6 or 0.7 would. This is discussed in
+   [`leakage_fix.md` §5](leakage_fix.md) — it is a symptom of thresholds calibrated against
+   pre-leak-fix numbers, not of the model being broken.
+3. **The threshold is nevertheless not changed here.** Pricing a missed fraud against an analyst's
+   review time is a business input this project does not have, and `AGENTS.md` requires the
+   decision be taken with the project owner rather than read off a metric.
 
-For contrast, the Logistic Regression baseline at the same threshold produces **TP=90, FP=1,441,
-FN=8** — it catches 6 more frauds at the cost of ~96× more false alarms.
+For contrast, the Logistic Regression baseline at threshold 0.5 produces **TP=89, FP=1,379,
+FN=9** — it catches 2 more frauds at the cost of ~13× more false alarms.
 
 > ⚠️ Threshold change is a **business decision** — contact project owner before modifying.
+> `DECISION_THRESHOLD` lives in `src/config.py`.
 
 ---
 
@@ -194,26 +214,33 @@ uv run mlflow ui  # → http://localhost:5000
 - **Historical data**: Fraud patterns evolve — model expects **quarterly retraining** at minimum
 - **PCA anonymization**: V1–V28 cannot be interpreted in domain terms — limits debugging of edge cases
 
-### Methodological Limitations (known, not yet fixed)
+### Methodological Limitations
 
-Two places where the reported numbers are optimistically biased. Both are documented here rather
-than quietly left in the code, because the size of the bias matters more than its existence:
+Two data-leakage defects were present until 2026-08-21 and have been **fixed**: the `Amount`
+scaler was fitted before the train/test split, and early stopping used the test set as its watch
+list. Full diagnosis, before/after measurements and the reasoning are in
+[`leakage_fix.md`](leakage_fix.md). On identical test rows, removing them moved the same
+configuration (`lgbm_large`) from PR-AUC 0.8770 / precision 0.8485 / 15 FP to 0.8703 / 0.7615 / 26.
 
-- **The `Amount` scaler is fit before the train/test split.** `src/features.py::preprocess()` fits
-  `StandardScaler` on all 284,807 rows, then `split_data()` splits. Strictly this leaks test-set
-  statistics into training. In practice the leak is two scalars (mean 88.35, std 250.12) estimated
-  from 284k rows, affecting 1 of 29 features — the effect on the reported metrics is far below the
-  fourth decimal. The correct fix is to fit on the training split only and persist the fitted
-  scaler as a model artifact, which would also remove the hard-coded constants in `src/api.py`.
-- **Early stopping selects the number of boosting rounds on the test set.** Both `train_xgboost()`
-  and `train_lightgbm()` pass `eval_set=[(X_test, y_test)]`. The test set therefore participates
-  in choosing `best_iteration` (96 / 174 for the champion), so the reported test metrics are not
-  a fully clean held-out estimate. The correct fix is a three-way train/validation/test split,
-  early-stopping on validation and reporting on test. **This is the more material of the two** and
-  is the reason the numbers in §4 should be read as "selection-set" rather than "held-out" results.
+What remains open, honestly stated:
 
-Neither issue affects the *ranking* of the seven runs (all were early-stopped identically), so the
-model-selection conclusion stands; both affect the absolute level of the reported metrics.
+- **Selection runs on a single validation split.** 45,569 rows containing only **79 frauds** is a
+  noisy basis for a precision estimate, and taking the maximum over seven candidates biases the
+  winner upward. It shows: the promoted champion clears the precision floor on validation
+  (0.5238) and misses it on test (0.4555). Stratified k-fold on train+val, selecting on the mean,
+  is the change most likely to close that gap.
+- **The gate's thresholds were calibrated against pre-fix numbers.** `MIN_RECALL = 0.80` and
+  `MIN_PRECISION = 0.50` were set when metrics were inflated. Under honest measurement the two
+  models with the best test performance are rejected for missing recall by 0.0025 and 0.0152.
+  Re-deriving both from real review capacity is a business conversation, not a code change.
+- **No refit on train+val after selection.** The champion is trained on 64% of the data and
+  shipped as-is. Refitting the chosen configuration on train+val at the selected iteration count
+  would use 80% and typically helps, but it forfeits the ability to re-verify the exact artifact
+  against validation, so it was left out deliberately.
+- **The deployed artifact is a bare estimator, not a pipeline.** `src/api.py` re-applies the
+  `Amount` scaling from constants in `src/config.py`. A test asserts those constants match the
+  scaler fitted from the real training split, but bundling the scaler with the model would remove
+  the failure mode entirely.
 
 ### Model Limitations
 
@@ -285,11 +312,11 @@ warm-up, request handling + preprocessing + inference; excludes network transit)
 
 | Endpoint | Median | p95 | Per transaction |
 |----------|--------|-----|-----------------|
-| `POST /predict` (1 tx) | **2.04 ms** | 2.79 ms | 2.04 ms |
-| `POST /predict/batch` (10 tx) | 2.53 ms | 3.51 ms | 0.253 ms |
-| `POST /predict/batch` (100 tx) | 6.86 ms | 8.88 ms | **0.069 ms** |
+| `POST /predict` (1 tx) | **1.58 ms** | 2.45 ms | 1.58 ms |
+| `POST /predict/batch` (10 tx) | 2.33 ms | 3.88 ms | 0.233 ms |
+| `POST /predict/batch` (100 tx) | 5.99 ms | 7.94 ms | **0.060 ms** |
 
-Batching is worth using: 100 transactions cost 6.86 ms in one call versus ~204 ms as 100 separate
+Batching is worth using: 100 transactions cost 5.99 ms in one call versus ~158 ms as 100 separate
 calls, because `predict_proba` is invoked once for the whole frame rather than once per row. The
 per-request fixed cost — HTTP handling, Pydantic validation, DataFrame construction — dominates
 single-transaction latency, not the model itself.

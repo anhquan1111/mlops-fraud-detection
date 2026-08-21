@@ -23,29 +23,36 @@ End-to-end MLOps pipeline for **real-time credit card fraud detection** on a sev
 
 ## 📊 Results at a Glance
 
-| Model | PR-AUC | Recall | Precision | F1 |
-|-------|--------|--------|-----------|-----|
-| Logistic Regression (baseline) | 0.7156 | 0.9184 | 0.0588 | 0.1105 |
-| XGBoost default | 0.8707 | 0.8367 | 0.7664 | 0.8000 |
-| XGBoost deep | 0.7001 | 0.8367 | 0.4184 | 0.5578 |
-| XGBoost regularized | 0.7139 | 0.8673 | 0.3571 | 0.5060 |
-| LightGBM default | 0.8757 | 0.8878 | 0.6493 | 0.7500 |
-| LightGBM regularized | 0.7440 | 0.8878 | 0.4065 | 0.5577 |
-| **LightGBM large** ⭐ | **0.8770** | **0.8571** | **0.8485** | **0.8528** |
+| Run | val PR-AUC | val Recall | val Prec | test PR-AUC | test Recall | test Prec | TP | FP | Gate |
+|---|---|---|---|---|---|---|---|---|---|
+| `lgbm_large` | 0.8160 | 0.7975 | 0.8289 | 0.8703 | 0.8469 | 0.7615 | 83 | 26 | ❌ recall |
+| `lgbm_default` | 0.8038 | 0.8228 | 0.4815 | 0.8496 | 0.8878 | 0.4652 | 87 | 100 | ❌ precision |
+| `xgb_default` | 0.7899 | 0.7848 | 0.8267 | 0.8604 | 0.8265 | 0.7714 | 81 | 24 | ❌ recall |
+| **`lgbm_regularized`** ⭐ | **0.7407** | **0.8354** | **0.5238** | 0.7462 | 0.8878 | 0.4555 | 87 | 104 | ✅ **champion** |
+| `xgb_regularized` | 0.7135 | 0.7848 | 0.4593 | 0.7096 | 0.8571 | 0.4200 | 84 | 116 | ❌ both |
+| `xgb_deep` | 0.6831 | 0.7342 | 0.5000 | 0.6932 | 0.8061 | 0.4647 | 79 | 91 | ❌ recall |
+| Logistic Regression (baseline) | 0.6755 | 0.8861 | 0.0591 | 0.7105 | 0.9082 | 0.0606 | 89 | 1379 | ❌ precision |
 
-> ⭐ **Champion model** — `lgbm_large` — registered in MLflow Registry under alias `production`.
+> ⭐ **Champion** — `lgbm_regularized` — registered in MLflow Registry under alias `production`.
 >
-> **Success thresholds**: Recall ≥ 0.80 · Precision ≥ 0.50 · PR-AUC ≥ current `production`
+> **Ranking is by `val_pr_auc`.** The test split (56,962 rows, 98 frauds) is scored once per run
+> for reporting and never influences early stopping, ranking, or the gate.
 >
-> Only **3 of 7** runs clear the gate (`xgb_default`, `lgbm_default`, `lgbm_large`) — the other
-> four are rejected on precision. The Logistic Regression baseline is deliberately kept in the
-> table as the PR-AUC reference point: at threshold 0.5 with `class_weight='balanced'` it flags
-> ~1,400 legitimate transactions to catch 90 frauds, which is exactly the failure mode PR-AUC
-> exposes and accuracy would hide.
+> **Success thresholds**: Recall ≥ 0.80 · Precision ≥ 0.50 · PR-AUC ≥ current `production`.
+> The gate rejects **6 of 7** runs — 4 on recall, 3 on precision.
+
+> ### ⚠️ These numbers are lower than earlier versions of this README, on purpose
 >
-> 📄 Full breakdown, a measured threshold sweep, and two **known methodological limitations**
-> (scaler fit before split; early stopping on the test set) are documented in
-> [`docs/model_card.md`](docs/model_card.md).
+> The pipeline previously fitted the `Amount` scaler before the train/test split, and used the
+> **test set** as the early-stopping watch list. Both were fixed on 2026-08-21. On the identical
+> test rows and the identical configuration, `lgbm_large` moved from PR-AUC 0.8770 / precision
+> 0.8485 / 15 false positives to **0.8703 / 0.7615 / 26** — the ranking quality was real, the
+> threshold-level precision was not. Full diagnosis, before/after tables and an unresolved finding
+> the fix exposed: **[`docs/leakage_fix.md`](docs/leakage_fix.md)**.
+>
+> A separate earlier defect: the metric table in this README did not match `mlflow.db` at all —
+> six of seven rows were values that appear in no run on record. It has been rebuilt from the
+> tracking database.
 
 ---
 
@@ -62,7 +69,7 @@ flowchart TD
     D --> D3[LightGBM grid\n3 configs]
 
     D1 & D2 & D3 --> E[MLflow Tracking\nexperiment: fraud-detection]
-    E --> F[Validation Gate\nsrc/validate.py\nRecall ≥ 0.80 · PR-AUC ≥ prod]
+    E --> F[Validation Gate\nsrc/validate.py\non VAL: Recall ≥ 0.80 · Prec ≥ 0.50\nPR-AUC ≥ prod]
     F --> G[MLflow Registry\nalias: production]
 
     G --> H[FastAPI\nsrc/api.py\nPOST /predict]

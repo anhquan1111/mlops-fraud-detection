@@ -12,8 +12,21 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.config import FEATURE_COLS, PCA_FEATURES, TARGET_COL
-from src.features import load_data, preprocess, split_data
+from src.config import (
+    AMOUNT_MEAN,
+    AMOUNT_STD,
+    FEATURE_COLS,
+    PCA_FEATURES,
+    RAW_DATA_PATH,
+    TARGET_COL,
+)
+from src.features import (
+    apply_amount_scaler,
+    fit_amount_scaler,
+    load_data,
+    preprocess,
+    split_data,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers / Fixtures
@@ -115,17 +128,14 @@ class TestPreprocess:
         assert X.shape[1] == len(FEATURE_COLS)
         assert list(X.columns) == FEATURE_COLS
 
-    def test_amount_is_scaled(self, raw_df: pd.DataFrame) -> None:
-        """Amount should be standardized: mean ≈ 0, std ≈ 1 (approximately)."""
+    def test_amount_is_left_raw(self, raw_df: pd.DataFrame) -> None:
+        """Amount must pass through UNSCALED — scaling happens after the split.
+
+        Fitting the scaler inside preprocess() would compute mean/std over the
+        whole dataset, including the test rows, and leak them into training.
+        """
         X, _ = preprocess(raw_df)
-        amount_mean = X["Amount"].mean()
-        amount_std = X["Amount"].std()
-        assert abs(amount_mean) < 0.1, (
-            f"Amount mean after scaling: {amount_mean:.4f} (expected ≈ 0)"
-        )
-        assert abs(amount_std - 1.0) < 0.1, (
-            f"Amount std after scaling: {amount_std:.4f} (expected ≈ 1)"
-        )
+        np.testing.assert_array_equal(X["Amount"].values, raw_df["Amount"].values)
 
     def test_pca_features_unchanged(self, raw_df: pd.DataFrame) -> None:
         """V1-V28 values must pass through unchanged."""
@@ -155,52 +165,147 @@ class TestSplitData:
     def preprocessed(self, raw_df: pd.DataFrame):
         return preprocess(raw_df)
 
-    def test_default_split_ratio(self, preprocessed) -> None:
-        """Default 80/20 split — test set should be ~20% of total."""
+    def test_returns_three_splits(self, preprocessed) -> None:
+        """split_data() returns train/val/test features and labels."""
         X, y = preprocessed
-        X_train, X_test, y_train, y_test = split_data(X, y)
-        total = len(X_train) + len(X_test)
-        assert total == len(X)
-        test_ratio = len(X_test) / total
-        assert abs(test_ratio - 0.2) < 0.02  # ±2% tolerance
+        X_train, X_val, X_test, y_train, y_val, y_test = split_data(X, y)
+        for frame in (X_train, X_val, X_test):
+            assert isinstance(frame, pd.DataFrame)
+        for series in (y_train, y_val, y_test):
+            assert isinstance(series, pd.Series)
+
+    def test_splits_partition_the_dataset(self, preprocessed) -> None:
+        """The three splits must cover every row exactly once."""
+        X, y = preprocessed
+        X_train, X_val, X_test, _, _, _ = split_data(X, y)
+        assert len(X_train) + len(X_val) + len(X_test) == len(X)
+
+    def test_default_split_ratio_64_16_20(self, preprocessed) -> None:
+        """Default proportions: 64% train, 16% val, 20% test (±2%)."""
+        X, y = preprocessed
+        X_train, X_val, X_test, _, _, _ = split_data(X, y)
+        total = len(X)
+        assert abs(len(X_test) / total - 0.20) < 0.02
+        assert abs(len(X_val) / total - 0.16) < 0.02
+        assert abs(len(X_train) / total - 0.64) < 0.02
 
     def test_custom_split_ratio(self, preprocessed) -> None:
-        """Custom test_size parameter should be respected."""
+        """test_size and val_size parameters must both be respected."""
         X, y = preprocessed
-        X_train, X_test, _, _ = split_data(X, y, test_size=0.3)
-        test_ratio = len(X_test) / len(X)
-        assert abs(test_ratio - 0.3) < 0.02
+        X_train, X_val, X_test, _, _, _ = split_data(X, y, test_size=0.3, val_size=0.5)
+        assert abs(len(X_test) / len(X) - 0.30) < 0.02
+        # val_size is a fraction of the post-test remainder: 0.5 * 0.7 = 0.35
+        assert abs(len(X_val) / len(X) - 0.35) < 0.02
 
-    def test_no_index_overlap(self, preprocessed) -> None:
-        """Train and test sets must not share any row indices."""
+    def test_no_index_overlap_between_any_pair(self, preprocessed) -> None:
+        """No row may appear in more than one split — the core leak guarantee."""
         X, y = preprocessed
-        X_train, X_test, _, _ = split_data(X, y)
-        train_idx = set(X_train.index)
-        test_idx = set(X_test.index)
+        X_train, X_val, X_test, _, _, _ = split_data(X, y)
+        train_idx, val_idx, test_idx = (
+            set(X_train.index),
+            set(X_val.index),
+            set(X_test.index),
+        )
+        assert train_idx.isdisjoint(val_idx)
         assert train_idx.isdisjoint(test_idx)
+        assert val_idx.isdisjoint(test_idx)
 
     def test_stratified_fraud_ratio(self, preprocessed) -> None:
-        """Fraud ratio in train and test should be approximately equal."""
+        """Fraud ratio must be approximately equal across all three splits."""
         X, y = preprocessed
-        _, _, y_train, y_test = split_data(X, y)
-        train_fraud_rate = y_train.mean()
-        test_fraud_rate = y_test.mean()
-        # Tolerance: ±1% absolute
-        assert abs(train_fraud_rate - test_fraud_rate) < 0.01
+        _, _, _, y_train, y_val, y_test = split_data(X, y)
+        rates = [y_train.mean(), y_val.mean(), y_test.mean()]
+        assert max(rates) - min(rates) < 0.01
+
+    def test_every_split_contains_fraud(self, preprocessed) -> None:
+        """Stratification must keep at least one positive in each split."""
+        X, y = preprocessed
+        _, _, _, y_train, y_val, y_test = split_data(X, y)
+        assert y_train.sum() > 0
+        assert y_val.sum() > 0
+        assert y_test.sum() > 0
 
     def test_deterministic_with_same_seed(self, preprocessed) -> None:
         """Same random_state must produce identical splits."""
         X, y = preprocessed
-        X_train_a, X_test_a, _, _ = split_data(X, y, random_state=99)
-        X_train_b, X_test_b, _, _ = split_data(X, y, random_state=99)
-        pd.testing.assert_frame_equal(X_train_a, X_train_b)
-        pd.testing.assert_frame_equal(X_test_a, X_test_b)
+        a = split_data(X, y, random_state=99)
+        b = split_data(X, y, random_state=99)
+        for frame_a, frame_b in zip(a[:3], b[:3], strict=True):
+            pd.testing.assert_frame_equal(frame_a, frame_b)
 
-    def test_returns_dataframes_and_series(self, preprocessed) -> None:
-        """Return types: (DataFrame, DataFrame, Series, Series)."""
+    def test_test_split_is_independent_of_val_size(self, preprocessed) -> None:
+        """Changing val_size must not move a single row into or out of test.
+
+        The test set is carved out first precisely so that tuning the
+        train/val proportion can never disturb the held-out evaluation set.
+        """
         X, y = preprocessed
-        X_train, X_test, y_train, y_test = split_data(X, y)
-        assert isinstance(X_train, pd.DataFrame)
-        assert isinstance(X_test, pd.DataFrame)
-        assert isinstance(y_train, pd.Series)
-        assert isinstance(y_test, pd.Series)
+        _, _, test_a, _, _, _ = split_data(X, y, val_size=0.2)
+        _, _, test_b, _, _, _ = split_data(X, y, val_size=0.4)
+        assert set(test_a.index) == set(test_b.index)
+
+
+# ---------------------------------------------------------------------------
+# Amount scaler tests — the leak-free replacement for in-preprocess scaling
+# ---------------------------------------------------------------------------
+
+
+class TestAmountScaler:
+    @pytest.fixture()
+    def splits(self, raw_df: pd.DataFrame):
+        X, y = preprocess(raw_df)
+        return split_data(X, y)
+
+    def test_scaler_fitted_only_on_train(self, splits) -> None:
+        """Scaler statistics must equal the TRAIN split's own mean/std."""
+        X_train = splits[0]
+        scaler = fit_amount_scaler(X_train)
+        assert scaler.mean_[0] == pytest.approx(X_train["Amount"].mean())
+        assert scaler.scale_[0] == pytest.approx(X_train["Amount"].std(ddof=0))
+
+    def test_scaler_ignores_val_and_test(self, splits) -> None:
+        """Refitting on train alone vs. on all data must differ — proving no leak."""
+        X_train, X_val, X_test = splits[0], splits[1], splits[2]
+        train_only = fit_amount_scaler(X_train)
+        all_data = fit_amount_scaler(pd.concat([X_train, X_val, X_test]))
+        # Statistics computed over different row sets must not coincide exactly.
+        assert train_only.mean_[0] != all_data.mean_[0]
+
+    def test_transformed_train_is_standardized(self, splits) -> None:
+        """Applying the scaler to its own training split yields mean 0, std 1."""
+        X_train = splits[0]
+        scaler = fit_amount_scaler(X_train)
+        scaled = apply_amount_scaler(scaler, X_train)
+        assert scaled["Amount"].mean() == pytest.approx(0.0, abs=1e-9)
+        assert scaled["Amount"].std(ddof=0) == pytest.approx(1.0, abs=1e-9)
+
+    def test_apply_does_not_mutate_input(self, splits) -> None:
+        """apply_amount_scaler() must return a copy, never edit in place."""
+        X_val = splits[1]
+        original = X_val["Amount"].copy()
+        scaler = fit_amount_scaler(splits[0])
+        apply_amount_scaler(scaler, X_val)
+        pd.testing.assert_series_equal(X_val["Amount"], original)
+
+    def test_apply_leaves_pca_features_untouched(self, splits) -> None:
+        """Only Amount is scaled; V1-V28 are already PCA-whitened."""
+        X_val = splits[1]
+        scaler = fit_amount_scaler(splits[0])
+        scaled = apply_amount_scaler(scaler, X_val)
+        for col in PCA_FEATURES:
+            np.testing.assert_array_equal(scaled[col].values, X_val[col].values)
+
+    def test_config_constants_match_real_training_split(self) -> None:
+        """src/config.py AMOUNT_MEAN/STD must match the real train split.
+
+        src/api.py scales incoming Amount with these constants because the
+        deployed artifact is a bare estimator, not a pipeline. If they drift
+        from the scaler the champion was trained with, every served prediction
+        is silently skewed. Skipped when the Kaggle CSV is not present.
+        """
+        if not RAW_DATA_PATH.exists():
+            pytest.skip("creditcard.csv not available")
+        X, y = preprocess(load_data(RAW_DATA_PATH))
+        scaler = fit_amount_scaler(split_data(X, y)[0])
+        assert scaler.mean_[0] == pytest.approx(AMOUNT_MEAN, abs=5e-5)
+        assert scaler.scale_[0] == pytest.approx(AMOUNT_STD, abs=5e-5)
