@@ -2,8 +2,9 @@
 
 This script:
 1. Loads the 'production' aliased model from MLflow Registry
-2. Saves it as models/baseline_lr.pkl (gitignored)
-3. Optionally uploads to Hugging Face Hub model repo for Render deployment
+2. Saves it locally as models/<MODEL_ARTIFACT_FILENAME> (gitignored)
+3. Optionally uploads it to Hugging Face Hub under the SAME filename, which is
+   what src/api.py downloads at startup on Render.
 
 Usage:
     # Export only (local)
@@ -23,14 +24,13 @@ import joblib
 import mlflow
 from mlflow.tracking import MlflowClient
 
-from src.config import MLFLOW_TRACKING_URI
+from src.config import LOCAL_MODEL_PATH, MLFLOW_TRACKING_URI, MODEL_ARTIFACT_FILENAME
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 REGISTERED_MODEL_NAME = "fraud-detection-model"  # matches src/config.py
 MODEL_ALIAS = "production"
-LOCAL_MODEL_PATH = Path("models/fraud_model.pkl")
 
 
 def _load_any_flavor(model_uri: str):
@@ -62,7 +62,7 @@ def _load_any_flavor(model_uri: str):
     for flavor_name, loader in loaders:
         try:
             model = loader(model_uri)
-            logger.info(f"✅ Loaded as '{flavor_name}' flavor.")
+            logger.info(f"[OK] Loaded as '{flavor_name}' flavor.")
             return model
         except Exception as exc:  # noqa: BLE001
             logger.debug(f"Flavor '{flavor_name}' not available: {exc}")
@@ -104,7 +104,7 @@ def export_model(upload: bool = False) -> Path:
     # Save to pickle
     joblib.dump(model, LOCAL_MODEL_PATH)
     size_kb = LOCAL_MODEL_PATH.stat().st_size / 1024
-    logger.info(f"✅ Model saved → {LOCAL_MODEL_PATH} ({size_kb:.1f} KB)")
+    logger.info(f"[OK] Model saved -> {LOCAL_MODEL_PATH} ({size_kb:.1f} KB)")
 
     # Optional: upload to HF Hub
     if upload:
@@ -150,16 +150,16 @@ def _upload_to_hf_hub(model_path: Path, model_version) -> None:
     # Upload model pickle
     api.upload_file(
         path_or_fileobj=str(model_path),
-        path_in_repo="baseline_lr.pkl",
+        path_in_repo=MODEL_ARTIFACT_FILENAME,
         repo_id=hf_repo_id,
         repo_type="model",
         commit_message=(
-            f"Upload baseline LR model v{model_version.version} (run_id={model_version.run_id[:8]})"
+            f"Upload champion model v{model_version.version} (run_id={model_version.run_id[:8]})"
         ),
     )
     logger.info(
-        f"✅ Model uploaded to HF Hub: "
-        f"https://huggingface.co/{hf_repo_id}/blob/main/baseline_lr.pkl"
+        f"[OK] Model uploaded to HF Hub: "
+        f"https://huggingface.co/{hf_repo_id}/blob/main/{MODEL_ARTIFACT_FILENAME}"
     )
 
     # Upload model card
@@ -196,7 +196,7 @@ Registered in MLflow Registry as `fraud-detection-model@production`.
 import joblib
 import numpy as np
 
-model = joblib.load("fraud_model.pkl")
+model = joblib.load("{MODEL_ARTIFACT_FILENAME}")
 # features: V1-V28 (PCA), Amount (StandardScaler μ=88.35, σ=250.12)
 X = np.array([[...]])  # shape (1, 29)
 proba = model.predict_proba(X)[:, 1]  # fraud probability

@@ -112,7 +112,7 @@ def save_pr_curve(
     y_test: pd.Series,
     model_name: str = "model",
     output_dir: Path = FIGURES_DIR,
-) -> Path:
+) -> Path | None:
     """Save Precision-Recall curve as PNG artifact.
 
     Args:
@@ -123,7 +123,7 @@ def save_pr_curve(
         output_dir: Directory to save the PNG.
 
     Returns:
-        Path to the saved figure.
+        Path to the saved figure, or None if matplotlib is unavailable.
     """
     try:
         import matplotlib.pyplot as plt

@@ -74,18 +74,16 @@ jobs:
 
       # ------------------------------------------------------------------ #
       # 8. Unit + integration tests
-      #    - Excludes smoke test (needs real dataset)
-      #    - MODEL_PATH points to the bundled baseline model
+      #    models/ is gitignored, so no model artifact is checked out here.
+      #    tests/conftest.py generates a synthetic stand-in at this path before
+      #    the API tests import src.api — no trained artifact is required.
       # ------------------------------------------------------------------ #
       - name: Run pytest
         env:
           MODEL_PATH: models/baseline_lr.pkl
-          # Use an isolated in-memory MLflow DB so tests don't touch production
+          # Use an isolated MLflow DB so tests don't touch production
           MLFLOW_TRACKING_URI: sqlite:///ci_mlflow.db
-        run: |
-          uv run pytest tests/ -v --tb=short \
-            --ignore=tests/test_smoke.py \
-            -x
+        run: uv run pytest tests/ -v --tb=short
 
       # ------------------------------------------------------------------ #
       # 9. Pipeline smoke test (synthetic tiny dataset — no Kaggle needed)

@@ -171,6 +171,18 @@ LIGHTGBM_GRID: list[dict] = [
 REGISTERED_MODEL_NAME: str = "fraud-detection-model"
 
 # ---------------------------------------------------------------------------
+# Deployment artifact
+# ---------------------------------------------------------------------------
+# Filename of the exported champion pickle, both locally and on the Hugging Face
+# Hub. scripts/export_model.py writes it, src/api.py downloads it — they MUST
+# agree, so both import this constant instead of hard-coding a literal.
+# The historical name is "baseline_lr.pkl"; the live HF repo still serves that
+# filename, so changing it requires re-uploading before redeploying.
+
+MODEL_ARTIFACT_FILENAME: str = "baseline_lr.pkl"
+LOCAL_MODEL_PATH = PROJECT_ROOT / "models" / MODEL_ARTIFACT_FILENAME
+
+# ---------------------------------------------------------------------------
 # Success thresholds (from AGENTS.md)
 # ---------------------------------------------------------------------------
 

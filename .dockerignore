@@ -11,10 +11,12 @@ __pycache__/
 .venv/
 venv/
 
-# ML artifacts — NOT included in image (model is in models/ which IS included)
+# ML artifacts — never baked into the image. The model is fetched at runtime
+# from Hugging Face Hub (HF_REPO_ID) or bind-mounted via MODEL_PATH.
 mlruns/
 mlartifacts/
 mlflow.db
+models/
 *.pkl.bak
 
 # Data — never copy training data into image

@@ -135,7 +135,7 @@ def train_baseline(
             registered_model_name=None,
         )
 
-        logger.info(f"✅ Baseline run logged: {run_id}")
+        logger.info(f"[OK] Baseline run logged: {run_id}")
 
     return metrics
 
@@ -217,7 +217,7 @@ def train_xgboost(
             registered_model_name=None,
         )
 
-        logger.info(f"✅ XGBoost run logged: {run_id}")
+        logger.info(f"[OK] XGBoost run logged: {run_id}")
 
     return metrics
 
@@ -338,7 +338,7 @@ def _print_summary(results: list[dict]) -> None:
             f"{r['precision']:>6.4f}[{prec_ok}] {r['f1']:>7.4f}{marker}"
         )
     print("=" * 75)
-    print("\n  Baseline reference: LR — PR-AUC=0.7156, Recall=0.9184, Precision=0.8571")
+    print("\n  Baseline reference: LR -- PR-AUC=0.7156, Recall=0.9184, Precision=0.0588")
     print()
 
 
@@ -349,7 +349,7 @@ def _print_summary(results: list[dict]) -> None:
 
 def main() -> None:
     """Run full experiment: baseline + XGBoost grid + LightGBM grid."""
-    logger.info("🚀 Session 4: Multi-model fraud detection experiment")
+    logger.info("[>>] Session 4: Multi-model fraud detection experiment")
 
     # ------------------------------------------------------------------
     # 1. Load & preprocess data (shared across all runs)
@@ -424,7 +424,7 @@ def main() -> None:
     passing = [r for r in results if r["recall"] >= MIN_RECALL and r["precision"] >= MIN_PRECISION]
     if not passing:
         logger.error(
-            "❌ No model met minimum thresholds "
+            "[!!] No model met minimum thresholds "
             f"(Recall >= {MIN_RECALL}, Precision >= {MIN_PRECISION})"
         )
         sys.exit(1)

@@ -13,9 +13,9 @@ Decision logic:
 Usage (standalone):
     uv run python src/validate.py --run-id <mlflow_run_id>
 
-Usage (in train.py):
-    from src.validate import validate_and_promote
-    result = validate_and_promote(client, run_id, new_metrics)
+Usage (in scripts/select_best_model.py):
+    from src.validate import run_validation_gate
+    result = run_validation_gate(run_id, new_metrics, client=client)
 """
 
 from __future__ import annotations
@@ -23,7 +23,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING
 
 import mlflow
 from mlflow.tracking import MlflowClient
@@ -34,9 +33,6 @@ from src.config import (
     MLFLOW_TRACKING_URI,
     REGISTERED_MODEL_NAME,
 )
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +146,7 @@ def _promote_model(client: MlflowClient, run_id: str, model_name: str) -> str:
         Model version string that was promoted.
     """
     model_uri = f"runs:/{run_id}/model"
-    logger.info(f"Registering model from run {run_id} → {model_name}")
+    logger.info(f"Registering model from run {run_id} -> {model_name}")
     model_version = mlflow.register_model(model_uri=model_uri, name=model_name)
     version = model_version.version
 
@@ -159,7 +155,7 @@ def _promote_model(client: MlflowClient, run_id: str, model_name: str) -> str:
         alias="production",
         version=version,
     )
-    logger.info(f"✅ Promoted {model_name} v{version} → alias 'production'")
+    logger.info(f"[OK] Promoted {model_name} v{version} -> alias 'production'")
     return str(version)
 
 
@@ -206,7 +202,7 @@ def run_validation_gate(
     threshold_failures = _check_minimum_thresholds(new_metrics)
     if threshold_failures:
         reason = "Failed minimum thresholds: " + "; ".join(threshold_failures)
-        logger.warning(f"❌ REJECTED — {reason}")
+        logger.warning(f"[!!] REJECTED -- {reason}")
         return ValidationResult(
             status=ValidationStatus.REJECTED,
             new_metrics=new_metrics,
@@ -222,7 +218,7 @@ def run_validation_gate(
     if prod_metrics is None:
         # First deployment — no production model exists
         reason = "No production model found — first deployment, auto-promoting."
-        logger.info(f"🚀 FIRST_DEPLOYMENT — {reason}")
+        logger.info(f"[NEW] FIRST_DEPLOYMENT -- {reason}")
 
         promoted_version = None
         if promote_on_pass:
@@ -253,7 +249,7 @@ def run_validation_gate(
             f"PR-AUC regression: new={new_pr_auc:.4f} < production={prod_pr_auc:.4f}. "
             "Model must be at least as good as current production."
         )
-        logger.warning(f"❌ REJECTED — {reason}")
+        logger.warning(f"[!!] REJECTED -- {reason}")
         return ValidationResult(
             status=ValidationStatus.REJECTED,
             new_metrics=new_metrics,
@@ -267,11 +263,11 @@ def run_validation_gate(
     delta = new_pr_auc - prod_pr_auc
     reason = (
         f"New model passes all gates. "
-        f"PR-AUC improvement: +{delta:.4f} ({prod_pr_auc:.4f} → {new_pr_auc:.4f}). "
+        f"PR-AUC improvement: +{delta:.4f} ({prod_pr_auc:.4f} -> {new_pr_auc:.4f}). "
         f"Recall={new_metrics['recall']:.4f} >= {MIN_RECALL}, "
         f"Precision={new_metrics['precision']:.4f} >= {MIN_PRECISION}."
     )
-    logger.info(f"✅ PROMOTED — {reason}")
+    logger.info(f"[OK] PROMOTED -- {reason}")
 
     promoted_version = None
     if promote_on_pass:
@@ -293,10 +289,10 @@ def print_validation_report(result: ValidationResult) -> None:
         result: ValidationResult from run_validation_gate().
     """
     status_icon = {
-        ValidationStatus.PROMOTED: "✅",
-        ValidationStatus.REJECTED: "❌",
-        ValidationStatus.FIRST_DEPLOYMENT: "🚀",
-    }.get(result.status, "?")
+        ValidationStatus.PROMOTED: "[OK]",
+        ValidationStatus.REJECTED: "[!!]",
+        ValidationStatus.FIRST_DEPLOYMENT: "[NEW]",
+    }.get(result.status, "[??]")
 
     print(f"\n{'=' * 60}")
     print("  VALIDATION GATE REPORT")

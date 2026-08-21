@@ -3,12 +3,20 @@
 Selection criteria:
     1. Filter: recall >= MIN_RECALL AND precision >= MIN_PRECISION
     2. Sort by: pr_auc descending
-    3. Register winner as 'fraud-detection-model' with alias 'production'
+    3. Run the validation gate (src/validate.py) on the winner — it re-checks the
+       minimum thresholds AND blocks any PR-AUC regression against the model
+       currently holding the 'production' alias.
+    4. Register winner as 'fraud-detection-model' with alias 'production'
+
+The gate is the single source of truth for "may this model go to production".
+This script never promotes a model that the gate rejected.
 
 Usage:
     uv run python scripts/select_best_model.py
+    uv run python scripts/select_best_model.py --dry-run   # evaluate, do not promote
 """
 
+import argparse
 import logging
 import sys
 
@@ -22,6 +30,7 @@ from src.config import (
     MLFLOW_TRACKING_URI,
     REGISTERED_MODEL_NAME,
 )
+from src.validate import ValidationStatus, print_validation_report, run_validation_gate
 
 logging.basicConfig(
     level=logging.INFO,
@@ -88,7 +97,7 @@ def print_comparison_table(results: list[dict], best_run_id: str | None = None) 
         best_run_id: run_id of the selected best model (highlighted).
     """
     print("\n" + "=" * 90)
-    print("  ALL RUNS — fraud-detection experiment (sorted by PR-AUC)")
+    print("  ALL RUNS -- fraud-detection experiment (sorted by PR-AUC)")
     print("=" * 90)
     print(
         f"  {'Run Name':<24} {'Model Type':<22} {'PR-AUC':>7} "
@@ -142,7 +151,7 @@ def register_best_model(client: MlflowClient, best_run: dict) -> tuple[str, str]
     model_uri = f"runs:/{run_id}/model"
 
     logger.info(f"Registering model from run '{best_run['run_name']}' (run_id={run_id}) ...")
-    logger.info(f"  → Model URI: {model_uri}")
+    logger.info(f"  -> Model URI: {model_uri}")
 
     model_version = mlflow.register_model(
         model_uri=model_uri,
@@ -170,13 +179,17 @@ def register_best_model(client: MlflowClient, best_run: dict) -> tuple[str, str]
         alias="production",
         version=version,
     )
-    logger.info(f"✅ Alias 'production' → {REGISTERED_MODEL_NAME} v{version}")
+    logger.info(f"[OK] Alias 'production' -> {REGISTERED_MODEL_NAME} v{version}")
 
     return REGISTERED_MODEL_NAME, version
 
 
-def select_and_register() -> None:
-    """Main function: query runs, select best, register to MLflow Registry."""
+def select_and_register(dry_run: bool = False) -> None:
+    """Query runs, select the best, run the validation gate, then register.
+
+    Args:
+        dry_run: If True, run every check but do not touch the Model Registry.
+    """
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     client = MlflowClient()
 
@@ -201,7 +214,7 @@ def select_and_register() -> None:
 
     if not qualifying:
         logger.error(
-            f"❌ No runs meet minimum thresholds "
+            f"[!!] No runs meet minimum thresholds "
             f"(Recall >= {MIN_RECALL}, Precision >= {MIN_PRECISION})."
         )
         print_comparison_table(all_runs)
@@ -223,12 +236,35 @@ def select_and_register() -> None:
     print_comparison_table(all_runs, best_run_id=best["run_id"])
 
     # ------------------------------------------------------------------
-    # 4. Register best model → MLflow Registry with alias 'production'
+    # 4. Validation gate — the authority on production promotion
+    #    promote_on_pass=False: the gate decides, register_best_model() below
+    #    performs the registration so the version description is filled in.
+    # ------------------------------------------------------------------
+    gate_metrics = {k: best[k] for k in ("pr_auc", "recall", "precision", "f1", "roc_auc")}
+    gate_result = run_validation_gate(
+        run_id=best["run_id"],
+        new_metrics=gate_metrics,
+        client=client,
+        model_name=REGISTERED_MODEL_NAME,
+        promote_on_pass=False,
+    )
+    print_validation_report(gate_result)
+
+    if gate_result.status == ValidationStatus.REJECTED:
+        logger.error(f"Validation gate REJECTED the best run — not promoting. {gate_result.reason}")
+        sys.exit(1)
+
+    if dry_run:
+        logger.info("--dry-run: gate passed, skipping registration.")
+        return
+
+    # ------------------------------------------------------------------
+    # 5. Register best model → MLflow Registry with alias 'production'
     # ------------------------------------------------------------------
     model_name, version = register_best_model(client, best)
 
     # ------------------------------------------------------------------
-    # 5. Print final summary
+    # 6. Print final summary
     # ------------------------------------------------------------------
     print("\n" + "=" * 60)
     print("  [OK] MODEL REGISTRATION COMPLETE")
@@ -250,4 +286,12 @@ def select_and_register() -> None:
 
 
 if __name__ == "__main__":
-    select_and_register()
+    parser = argparse.ArgumentParser(
+        description="Select the best MLflow run, run the validation gate, and promote it."
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run selection and the validation gate without touching the Model Registry.",
+    )
+    select_and_register(dry_run=parser.parse_args().dry_run)

@@ -25,14 +25,18 @@ from pathlib import Path
 from typing import Any
 
 import joblib
-import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from src.config import DECISION_THRESHOLD, FEATURE_COLS, MLFLOW_TRACKING_URI
+from src.config import (
+    DECISION_THRESHOLD,
+    FEATURE_COLS,
+    MLFLOW_TRACKING_URI,
+    MODEL_ARTIFACT_FILENAME,
+)
 
 DASHBOARD_TEMPLATE_PATH = Path(__file__).parent / "templates" / "dashboard.html"
 
@@ -53,7 +57,7 @@ logger = logging.getLogger(__name__)
 
 REGISTERED_MODEL_NAME = "fraud-detection-model"
 MODEL_ALIAS = "production"
-HF_MODEL_FILENAME = "baseline_lr.pkl"  # filename on HF Hub (set by export_model.py)
+HF_MODEL_FILENAME = MODEL_ARTIFACT_FILENAME  # kept in sync with export_model.py
 
 # Approximate Amount scaler stats from the full Kaggle creditcard dataset
 # (computed during EDA — used to scale incoming raw Amount values)
@@ -80,7 +84,7 @@ def _load_from_local(model_path: str) -> tuple[Any, dict]:
     if not path.exists():
         raise FileNotFoundError(f"Model file not found: {path}")
     model = joblib.load(path)
-    logger.info(f"✅ Model loaded from local file: {path}")
+    logger.info(f"[OK] Model loaded from local file: {path}")
     return model, {"source": "local_file", "path": str(path)}
 
 
@@ -97,7 +101,7 @@ def _load_from_hf_hub(repo_id: str) -> tuple[Any, dict]:
         cache_dir="/tmp/hf_cache",
     )
     model = joblib.load(local_path)
-    logger.info(f"✅ Model downloaded from HF Hub: {repo_id}")
+    logger.info(f"[OK] Model downloaded from HF Hub: {repo_id}")
     return model, {"source": "huggingface_hub", "repo_id": repo_id}
 
 
@@ -110,7 +114,7 @@ def _load_from_mlflow() -> tuple[Any, dict]:
     model_uri = f"models:/{REGISTERED_MODEL_NAME}@{MODEL_ALIAS}"
     logger.info(f"Loading model from MLflow Registry: {model_uri}")
     model = mlflow.sklearn.load_model(model_uri)
-    logger.info("✅ Model loaded from MLflow Registry.")
+    logger.info("[OK] Model loaded from MLflow Registry.")
     return model, {"source": "mlflow_registry", "model_uri": model_uri}
 
 
@@ -141,17 +145,17 @@ async def lifespan(app: FastAPI):
     """Load model on startup, release on shutdown."""
     global _model, _model_info
 
-    logger.info("🚀 Starting Fraud Detection API ...")
+    logger.info("[>>] Starting Fraud Detection API ...")
     try:
         _model, _model_info = load_model()
         logger.info(f"Model ready. Source: {_model_info}")
     except Exception as exc:
-        logger.error(f"❌ Failed to load model: {exc}")
+        logger.error(f"[!!] Failed to load model: {exc}")
         raise RuntimeError(f"Cannot start API without model: {exc}") from exc
 
     yield  # App runs here
 
-    logger.info("🔻 Shutting down Fraud Detection API.")
+    logger.info("[--] Shutting down Fraud Detection API.")
     _model = None
 
 
@@ -289,8 +293,8 @@ class HealthResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _preprocess_transaction(tx: TransactionInput) -> np.ndarray:
-    """Convert a TransactionInput into a feature vector for prediction.
+def _to_feature_row(tx: TransactionInput) -> list[float]:
+    """Convert one TransactionInput into an ordered feature row.
 
     Applies the same preprocessing as src/features.py:
     - V1-V28: pass-through (already PCA-scaled in dataset)
@@ -300,15 +304,58 @@ def _preprocess_transaction(tx: TransactionInput) -> np.ndarray:
         tx: Transaction input object.
 
     Returns:
-        numpy array of shape (1, 29) ready for model.predict_proba().
+        List of len(FEATURE_COLS) floats, ordered to match FEATURE_COLS.
     """
-    features = []
-    for col in FEATURE_COLS:
-        val = getattr(tx, col)
-        if col == "Amount":
-            val = (val - _AMOUNT_MEAN) / _AMOUNT_STD
-        features.append(val)
-    return pd.DataFrame([features], columns=FEATURE_COLS)
+    return [
+        (getattr(tx, col) - _AMOUNT_MEAN) / _AMOUNT_STD if col == "Amount" else getattr(tx, col)
+        for col in FEATURE_COLS
+    ]
+
+
+def _build_feature_frame(transactions: list[TransactionInput]) -> pd.DataFrame:
+    """Stack transactions into a single DataFrame for one batched inference call.
+
+    Args:
+        transactions: One or more transaction inputs.
+
+    Returns:
+        DataFrame of shape (len(transactions), len(FEATURE_COLS)).
+    """
+    return pd.DataFrame(
+        [_to_feature_row(tx) for tx in transactions],
+        columns=FEATURE_COLS,
+    )
+
+
+def _predict_many(
+    transactions: list[TransactionInput],
+    threshold: float = DECISION_THRESHOLD,
+) -> list[PredictionResponse]:
+    """Score a list of transactions with a single vectorised inference call.
+
+    Calling predict_proba once for the whole batch — instead of once per row —
+    keeps batch latency roughly flat in batch size, since the per-call overhead
+    of the tree/linear model dominates the actual arithmetic at this scale.
+
+    Args:
+        transactions: Input transactions.
+        threshold: Decision threshold.
+
+    Returns:
+        One PredictionResponse per input, in the same order.
+    """
+    X = _build_feature_frame(transactions)
+    probas = _model.predict_proba(X)[:, 1]
+    model_name = f"{REGISTERED_MODEL_NAME}@{MODEL_ALIAS}"
+    return [
+        PredictionResponse(
+            fraud_probability=round(float(proba), 6),
+            is_fraud=bool(proba >= threshold),
+            threshold=threshold,
+            model_name=model_name,
+        )
+        for proba in probas
+    ]
 
 
 def _predict_one(tx: TransactionInput, threshold: float = DECISION_THRESHOLD) -> PredictionResponse:
@@ -321,15 +368,7 @@ def _predict_one(tx: TransactionInput, threshold: float = DECISION_THRESHOLD) ->
     Returns:
         PredictionResponse with probability, label, and metadata.
     """
-    X = _preprocess_transaction(tx)
-    proba = float(_model.predict_proba(X)[0, 1])
-    is_fraud = proba >= threshold
-    return PredictionResponse(
-        fraud_probability=round(proba, 6),
-        is_fraud=is_fraud,
-        threshold=threshold,
-        model_name=f"{REGISTERED_MODEL_NAME}@{MODEL_ALIAS}",
-    )
+    return _predict_many([tx], threshold=threshold)[0]
 
 
 # ---------------------------------------------------------------------------
@@ -453,7 +492,7 @@ async def predict_batch(transactions: list[TransactionInput]) -> BatchPrediction
             detail=f"Batch size exceeds limit: {len(transactions)} > 100.",
         )
     try:
-        predictions = [_predict_one(tx) for tx in transactions]
+        predictions = _predict_many(transactions)
         fraud_count = sum(1 for p in predictions if p.is_fraud)
         return BatchPredictionResponse(
             predictions=predictions,

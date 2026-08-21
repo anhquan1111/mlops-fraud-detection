@@ -25,17 +25,27 @@ End-to-end MLOps pipeline for **real-time credit card fraud detection** on a sev
 
 | Model | PR-AUC | Recall | Precision | F1 |
 |-------|--------|--------|-----------|-----|
-| Logistic Regression (baseline) | 0.7156 | 0.9184 | 0.8571 | 0.8867 |
-| XGBoost default | 0.8445 | 0.8163 | 0.9302 | 0.8696 |
-| XGBoost deep | 0.8391 | 0.7959 | 0.9286 | 0.8571 |
-| XGBoost regularized | 0.8373 | 0.7959 | 0.9070 | 0.8475 |
-| LightGBM default | 0.8657 | 0.8367 | 0.9114 | 0.8725 |
-| LightGBM regularized | 0.8700 | 0.8469 | 0.9130 | 0.8787 |
+| Logistic Regression (baseline) | 0.7156 | 0.9184 | 0.0588 | 0.1105 |
+| XGBoost default | 0.8707 | 0.8367 | 0.7664 | 0.8000 |
+| XGBoost deep | 0.7001 | 0.8367 | 0.4184 | 0.5578 |
+| XGBoost regularized | 0.7139 | 0.8673 | 0.3571 | 0.5060 |
+| LightGBM default | 0.8757 | 0.8878 | 0.6493 | 0.7500 |
+| LightGBM regularized | 0.7440 | 0.8878 | 0.4065 | 0.5577 |
 | **LightGBM large** ⭐ | **0.8770** | **0.8571** | **0.8485** | **0.8528** |
 
 > ⭐ **Champion model** — `lgbm_large` — registered in MLflow Registry under alias `production`.
 >
-> **Success thresholds**: Recall ≥ 0.80 ✅ · Precision ≥ 0.50 ✅ · PR-AUC > Baseline (0.7156) ✅
+> **Success thresholds**: Recall ≥ 0.80 · Precision ≥ 0.50 · PR-AUC ≥ current `production`
+>
+> Only **3 of 7** runs clear the gate (`xgb_default`, `lgbm_default`, `lgbm_large`) — the other
+> four are rejected on precision. The Logistic Regression baseline is deliberately kept in the
+> table as the PR-AUC reference point: at threshold 0.5 with `class_weight='balanced'` it flags
+> ~1,400 legitimate transactions to catch 90 frauds, which is exactly the failure mode PR-AUC
+> exposes and accuracy would hide.
+>
+> 📄 Full breakdown, a measured threshold sweep, and two **known methodological limitations**
+> (scaler fit before split; early stopping on the test set) are documented in
+> [`docs/model_card.md`](docs/model_card.md).
 
 ---
 
