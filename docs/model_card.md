@@ -23,15 +23,15 @@
 ```python
 {
     "n_estimators": 300,
-    "max_depth": -1,          # no limit (LGBM default)
+    "max_depth": -1,  # no limit (LGBM default)
     "learning_rate": 0.05,
     "num_leaves": 31,
     "subsample": 0.8,
     "colsample_bytree": 0.8,
-    "min_child_samples": 5,          # lower = less regularization, better for rare class
-    "class_weight": "balanced",      # imbalance handling
-    "metric": "average_precision",   # PR-AUC equivalent
-    "early_stopping_rounds": 30,     # watched on the VALIDATION split
+    "min_child_samples": 5,  # lower = less regularization, better for rare class
+    "class_weight": "balanced",  # imbalance handling
+    "metric": "average_precision",  # PR-AUC equivalent
+    "early_stopping_rounds": 30,  # watched on the VALIDATION split
     "random_state": 42,
 }
 ```

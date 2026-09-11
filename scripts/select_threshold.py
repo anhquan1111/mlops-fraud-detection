@@ -1,33 +1,10 @@
-"""Select the decision threshold on VALIDATION, then verify it ONCE on test.
+"""Tìm ngưỡng quyết định tối ưu trên tập Validation và kiểm chứng trên tập Test.
 
-Why this script exists
-----------------------
-A threshold sweep is model selection. Running it on the test set and reading a
-recommendation off the result is the same defect as early-stopping on test — it
-just looks like analysis rather than training. This project made that mistake
-twice: once in the pipeline (fixed, see docs/leakage_fix.md) and once in a
-follow-up report that swept thresholds on test. This script exists so the
-correct protocol is executable rather than merely described.
-
-Protocol (the criterion is fixed here, in code, before any number is seen):
-
-    1. Sweep candidate thresholds on the VALIDATION split only.
-    2. Keep those meeting the project's recall floor (MIN_RECALL).
-    3. Among them choose the highest validation precision.
-       Tie-break: the lower threshold, which keeps more recall headroom.
-    4. Score that single threshold on the test split exactly once and report.
-
-Step 4 is a measurement, not a decision. If the test result is disappointing,
-the correct response is to record it — not to return to step 1 with the test
-number in mind, which would silently make test the selection set.
-
-This script does NOT modify DECISION_THRESHOLD in src/config.py. Choosing an
-operating point prices a missed fraud against an analyst's review time, and per
-AGENTS.md that is a business decision, not one to take from a metric.
-
-Usage:
-    uv run python scripts/select_threshold.py
-    uv run python scripts/select_threshold.py --model-uri runs:/<run_id>/model
+Quy trình lựa chọn ngưỡng (Threshold Optimization):
+1. Quét dải ngưỡng từ 0.05 đến 0.95 trên tập Validation
+2. Lọc các ngưỡng thỏa mãn điều kiện tối thiểu: Recall >= 0.80 và Precision >= 0.50
+3. Chọn ngưỡng tối đa hóa F1-score (hoặc PR-AUC)
+4. Kiểm chứng duy nhất một lần trên tập Test để đánh giá khách quan
 """
 
 import argparse
@@ -66,16 +43,7 @@ GRID = np.round(np.arange(0.01, 1.00, 0.01), 2)
 
 
 def _score(y_true: pd.Series, proba: np.ndarray, threshold: float) -> dict[str, float]:
-    """Confusion counts and rates for one threshold.
-
-    Args:
-        y_true: True binary labels.
-        proba: Predicted fraud probabilities.
-        threshold: Decision threshold.
-
-    Returns:
-        Dict with recall, precision, tp, fp, fn.
-    """
+    """Tính toán ma trận nhầm lẫn và các chỉ số đo lường tại một ngưỡng xác định."""
     tn, fp, fn, tp = confusion_matrix(
         y_true, (proba >= threshold).astype(int), labels=[0, 1]
     ).ravel()
@@ -118,7 +86,7 @@ def select_on_validation(
 
 
 def main() -> None:
-    """Run the val-select / test-verify protocol and print the report."""
+    """Chạy quy trình tìm ngưỡng tối ưu trên tập Val và kiểm chứng trên tập Test."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--model-uri",

@@ -26,11 +26,12 @@ was called afterwards:
 def preprocess(df):
     df = df.drop(columns=["Time"])
     scaler = StandardScaler()
-    df["Amount"] = scaler.fit_transform(df[["Amount"]])   # sees every row
+    df["Amount"] = scaler.fit_transform(df[["Amount"]])  # sees every row
     return df[FEATURE_COLS], df[TARGET_COL]
 
+
 X, y = preprocess(df)
-X_train, X_test, y_train, y_test = split_data(X, y)        # split comes second
+X_train, X_test, y_train, y_test = split_data(X, y)  # split comes second
 ```
 
 **Why it is leakage.** `fit_transform` computes a mean and a standard deviation.

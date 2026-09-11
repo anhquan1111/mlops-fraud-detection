@@ -1,18 +1,13 @@
 """Tests for the FastAPI fraud detection endpoints.
 
 Uses FastAPI's TestClient (synchronous) which wraps httpx.
-Model is loaded from models/baseline_lr.pkl or MLflow Registry.
+Model is loaded from a temporary synthetic artifact provided by conftest.py.
 """
-
-import os
 
 import pytest
 from fastapi.testclient import TestClient
 
-# Point to local model for tests
-os.environ.setdefault("MODEL_PATH", "models/baseline_lr.pkl")
-
-from src.api import app  # noqa: E402 — must be imported after env var is set
+from src.api import app
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -116,11 +111,11 @@ class TestPredictEndpoint:
         expected = data["fraud_probability"] >= data["threshold"]
         assert data["is_fraud"] == expected
 
-    def test_predict_known_legit_transaction(self, client: TestClient):
-        """The sample transaction (first row of creditcard.csv) is legit (Class=0)."""
+    def test_predict_stub_response_is_repeatable(self, client: TestClient):
+        """This is an API contract check, not evidence of real fraud-model quality."""
         data = client.post("/predict", json=EXAMPLE_TRANSACTION).json()
-        # Logistic Regression baseline should correctly classify this as not fraud
-        assert data["is_fraud"] is False
+        repeated = client.post("/predict", json=EXAMPLE_TRANSACTION).json()
+        assert data == repeated
 
     def test_predict_negative_amount_rejected(self, client: TestClient):
         bad_tx = {**EXAMPLE_TRANSACTION, "Amount": -1.0}
@@ -170,3 +165,41 @@ class TestBatchPredictEndpoint:
         data = client.post("/predict/batch", json=payload).json()
         actual_fraud = sum(1 for p in data["predictions"] if p["is_fraud"])
         assert actual_fraud == data["fraud_count"]
+
+
+class TestMonitoringEndpoints:
+    """Tests for the Evidently monitoring endpoints."""
+
+    def test_monitoring_latest_returns_status(self, client: TestClient, monkeypatch, tmp_path):
+        monkeypatch.setattr("src.api.REPORTS_DIR", tmp_path)
+        response = client.get("/monitoring/latest")
+        assert response.status_code == 404
+        assert response.json()["status"] == "NO_REPORT"
+
+    def test_monitoring_report_returns_html(self, client: TestClient, monkeypatch, tmp_path):
+        monkeypatch.setattr("src.api.REPORTS_DIR", tmp_path)
+        (tmp_path / "drift_summary.json").write_text('{"status": "SUCCESS"}')
+        (tmp_path / "drift.html").write_text("<html>latest-test-report</html>")
+        response = client.get("/monitoring/report")
+        assert response.status_code == 200
+        assert "latest-test-report" in response.text
+        assert "text/html" in response.headers.get("content-type", "")
+
+    @pytest.mark.parametrize("latest_status", ["QUALITY_FAILURE", "RUNNING", "ERROR"])
+    def test_failed_or_running_job_hides_old_html(
+        self, client, monkeypatch, tmp_path, latest_status
+    ):
+        import json
+
+        monkeypatch.setattr("src.api.REPORTS_DIR", tmp_path)
+        (tmp_path / "drift.html").write_text("<html>STALE-REPORT</html>")
+        (tmp_path / "drift_summary.json").write_text(json.dumps({"status": latest_status}))
+        assert client.get("/monitoring/latest").json()["status"] == latest_status
+        response = client.get("/monitoring/report")
+        assert response.status_code == 404
+        assert "STALE-REPORT" not in response.text
+
+    @pytest.mark.parametrize("value", ["NaN", "Infinity", "-Infinity"])
+    def test_non_finite_input_rejected(self, client, value):
+        response = client.post("/predict", json={**EXAMPLE_TRANSACTION, "V1": value})
+        assert response.status_code == 422

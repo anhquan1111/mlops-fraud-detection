@@ -20,6 +20,9 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
+# Runtime configuration is loaded by src/config.py during import.
+COPY configs/ ./configs/
+
 # Copy source code
 COPY src/ ./src/
 
@@ -40,7 +43,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:10000/health')" || exit 1
 
 # Start uvicorn
-CMD ["uv", "run", "uvicorn", "src.api:app", \
+CMD ["uv", "run", "--no-sync", "uvicorn", "src.api:app", \
      "--host", "0.0.0.0", \
      "--port", "10000", \
      "--workers", "1", \

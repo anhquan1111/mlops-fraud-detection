@@ -49,7 +49,7 @@ ROC-AUC sử dụng True Negative Rate (Specificity), mà với 99.83% negative,
 **Áp dụng**:
 ```python
 # scikit-learn
-LogisticRegression(class_weight='balanced')
+LogisticRegression(class_weight="balanced")
 
 # XGBoost — scale_pos_weight = n_negative / n_positive
 XGBClassifier(scale_pos_weight=ratio_negative_to_positive)
@@ -83,11 +83,7 @@ Chỉ thử nếu `class_weight` chưa đạt ngưỡng target. **Quy tắc bắ
 ```python
 from sklearn.linear_model import LogisticRegression
 
-baseline = LogisticRegression(
-    class_weight='balanced',
-    max_iter=1000,
-    random_state=42
-)
+baseline = LogisticRegression(class_weight="balanced", max_iter=1000, random_state=42)
 ```
 
 ### 3.2 Model chính: XGBoost / LightGBM
@@ -102,10 +98,10 @@ baseline = LogisticRegression(
 from xgboost import XGBClassifier
 
 model = XGBClassifier(
-    scale_pos_weight=ratio,   # xử lý imbalance
-    eval_metric='aucpr',      # PR-AUC làm metric optimize
+    scale_pos_weight=ratio,  # xử lý imbalance
+    eval_metric="aucpr",  # PR-AUC làm metric optimize
     early_stopping_rounds=10,
-    random_state=42
+    random_state=42,
 )
 ```
 

@@ -1,0 +1,49 @@
+........................................................................ [ 50%]
+..........s............................................................  [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /tmp/fraud-review-20260910-f0k6115r/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+.venv/lib/python3.12/site-packages/evidently/legacy/tests/utils.py:183
+.venv/lib/python3.12/site-packages/evidently/legacy/tests/utils.py:183
+  /tmp/fraud-review-20260910-f0k6115r/.venv/lib/python3.12/site-packages/evidently/legacy/tests/utils.py:183: DeprecationWarning: numpy.core is deprecated and has been renamed to numpy._core. The numpy._core namespace contains private NumPy internals and its use is discouraged, as NumPy internals can change without warning in any release. In practice, most real-world usage of numpy.core is to access functionality in the public NumPy API. If that is the case, use the public NumPy API. If not, you are using NumPy internals. If you would still like to access an internal attribute, use numpy._core.numeric.
+    np.core.numeric.ScalarType = np.core.numeric.ScalarType + (ApproxValue, ApproxValueNoDict)  # type: ignore[attr-defined]
+
+.venv/lib/python3.12/site-packages/litestar/utils/deprecation.py:99
+.venv/lib/python3.12/site-packages/litestar/utils/deprecation.py:99
+.venv/lib/python3.12/site-packages/litestar/utils/deprecation.py:99
+.venv/lib/python3.12/site-packages/litestar/utils/deprecation.py:99
+  /tmp/fraud-review-20260910-f0k6115r/.venv/lib/python3.12/site-packages/litestar/utils/deprecation.py:99: LitestarDeprecationWarning: Call to deprecated function 'Dependency'. Deprecated in litestar 2.23.0. This function will be removed in 3.0. Use 'di.NamedDependency' instead
+    warn_deprecation(
+
+.venv/lib/python3.12/site-packages/litestar/params.py:538
+.venv/lib/python3.12/site-packages/litestar/params.py:538
+.venv/lib/python3.12/site-packages/litestar/params.py:538
+.venv/lib/python3.12/site-packages/litestar/params.py:538
+  /tmp/fraud-review-20260910-f0k6115r/.venv/lib/python3.12/site-packages/litestar/params.py:538: LitestarDeprecationWarning: Use of deprecated class 'DependencyKwarg'. Deprecated in litestar 2.23.0. This class will be removed in 3.0. Use 'di.NamedDependency' instead
+    warn_deprecation(
+
+tests/test_api.py: 4 warnings
+tests/test_metrics.py: 20 warnings
+  /tmp/fraud-review-20260910-f0k6115r/.venv/lib/python3.12/site-packages/joblib/numpy_pickle.py:207: DeprecationWarning: Setting the shape on a NumPy array has been deprecated in NumPy 2.5.
+  As an alternative, you can create a new view using np.reshape (with copy=False if needed).
+    array.shape = self.shape
+
+tests/test_monitor.py::test_future_labels_do_not_complete_matured_cohort
+tests/test_monitor.py::test_future_labels_do_not_complete_matured_cohort
+tests/test_monitor.py::TestMaturedCohortAudit::test_complete_cohort_calculates_metrics
+tests/test_monitor.py::TestMaturedCohortAudit::test_partial_cohort_returns_insufficient_labels
+tests/test_monitor_cli.py::test_cohort_command_joins_files_and_writes_summary
+  /tmp/fraud-review-20260910-f0k6115r/src/monitor.py:340: DeprecationWarning:
+  
+  The 'generic' unit for NumPy timedelta is deprecated, and will raise an error in the future. This includes implicit conversion of bare integers (e.g. `+ 1`).Please use a specific unit instead.
+
+tests/test_review_regressions.py: 28 warnings
+  /tmp/fraud-review-20260910-f0k6115r/.venv/lib/python3.12/site-packages/joblib/numpy_pickle.py:207: DeprecationWarning:
+  
+  Setting the shape on a NumPy array has been deprecated in NumPy 2.5.
+  As an alternative, you can create a new view using np.reshape (with copy=False if needed).
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+142 passed, 1 skipped, 68 warnings in 7.90s

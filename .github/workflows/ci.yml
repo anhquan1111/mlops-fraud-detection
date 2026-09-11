@@ -13,7 +13,7 @@ concurrency:
 
 env:
   PYTHON_VERSION: "3.12"
-  UV_VERSION: "0.5.x"
+  UV_VERSION: "0.12.5"
 
 jobs:
   ci:
@@ -58,7 +58,7 @@ jobs:
       # 5. Install dependencies (dev extras for pytest + ruff)
       # ------------------------------------------------------------------ #
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --locked --extra dev
 
       # ------------------------------------------------------------------ #
       # 6. Lint: ruff check
@@ -75,12 +75,11 @@ jobs:
       # ------------------------------------------------------------------ #
       # 8. Unit + integration tests
       #    models/ is gitignored, so no model artifact is checked out here.
-      #    tests/conftest.py generates a synthetic stand-in at this path before
-      #    the API tests import src.api — no trained artifact is required.
+      #    tests/conftest.py creates a synthetic stand-in in pytest's temporary
+      #    directory and overrides MODEL_PATH — no trained artifact is required.
       # ------------------------------------------------------------------ #
       - name: Run pytest
         env:
-          MODEL_PATH: models/baseline_lr.pkl
           # Use an isolated MLflow DB so tests don't touch production
           MLFLOW_TRACKING_URI: sqlite:///ci_mlflow.db
         run: uv run pytest tests/ -v --tb=short

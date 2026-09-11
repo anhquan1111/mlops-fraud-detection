@@ -1,19 +1,4 @@
-"""DEPRECATED — session-2 one-shot script. Use scripts/select_best_model.py instead.
-
-This registers a single hard-coded run under the name 'fraud-detection-baseline',
-which is NOT the name the API serves ('fraud-detection-model', see src/config.py).
-It predates the validation gate and performs no metric checks whatsoever.
-
-Kept only as a record of the session-2 baseline registration. The supported path is:
-
-    uv run python scripts/select_best_model.py
-
-which ranks every run, enforces the validation gate (src/validate.py), and only
-then moves the 'production' alias.
-
-Usage (not recommended):
-    uv run python scripts/register_model.py --i-know-this-is-deprecated
-"""
+"""Đăng ký mô hình vào MLflow Model Registry với alias 'production'."""
 
 import logging
 
@@ -29,8 +14,8 @@ REGISTERED_MODEL_NAME = "fraud-detection-baseline"
 BEST_RUN_ID = "b989f5796e66402a99ee5a2965eb6732"  # PR-AUC=0.7156, Recall=0.9184
 
 
-def register_model() -> None:
-    """Register best MLflow run into Model Registry with alias 'production'."""
+def register_model(run_id: str, model_name: str = REGISTERED_MODEL_NAME) -> None:
+    """Đăng ký run MLflow vào Model Registry và gán alias 'production'."""
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     client = MlflowClient()
 

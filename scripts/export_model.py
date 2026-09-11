@@ -1,24 +1,12 @@
-"""Export trained model from MLflow Registry to local pickle + upload to Hugging Face Hub.
-
-This script:
-1. Loads the 'production' aliased model from MLflow Registry
-2. Saves it locally as models/<MODEL_ARTIFACT_FILENAME> (gitignored)
-3. Optionally uploads it to Hugging Face Hub under the SAME filename, which is
-   what src/api.py downloads at startup on Render.
-
-Usage:
-    # Export only (local)
-    uv run python scripts/export_model.py
-
-    # Export + upload to HF Hub
-    HF_TOKEN=hf_xxx HF_REPO_ID=your-username/fraud-detection-model \\
-        uv run python scripts/export_model.py --upload
-"""
+"""Xuất mô hình Production từ MLflow Registry ra file pickle cục bộ và tải lên Hugging Face Hub."""
 
 import argparse
 import logging
 import os
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import joblib
 import mlflow
@@ -35,26 +23,12 @@ from src.config import (
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
-REGISTERED_MODEL_NAME = "fraud-detection-model"  # matches src/config.py
+REGISTERED_MODEL_NAME = "fraud-detection-model"  # Khớp với khai báo trong src/config.py
 MODEL_ALIAS = "production"
 
 
 def _load_any_flavor(model_uri: str):
-    """Load MLflow model using the correct flavor (sklearn / lightgbm / xgboost).
-
-    Tries each flavor in order until one succeeds. This is needed because the
-    registered production model may be LightGBM, XGBoost, or sklearn depending
-    on which experiment run performed best.
-
-    Args:
-        model_uri: MLflow model URI, e.g. 'models:/fraud-detection-model@production'.
-
-    Returns:
-        Loaded model object supporting predict_proba().
-
-    Raises:
-        RuntimeError: If no supported flavor is found.
-    """
+    """Nạp model từ MLflow theo đúng định dạng tương ứng (sklearn, lightgbm hoặc xgboost)."""
     import mlflow.lightgbm
     import mlflow.sklearn
     import mlflow.xgboost
@@ -79,14 +53,7 @@ def _load_any_flavor(model_uri: str):
 
 
 def _load_run_metrics(run_id: str) -> dict[str, float]:
-    """Read the metrics logged on an MLflow run.
-
-    Args:
-        run_id: MLflow run ID backing the registered model version.
-
-    Returns:
-        Metric name -> value, or an empty dict if the run cannot be read.
-    """
+    """Đọc các metrics đã ghi nhận của run tương ứng từ MLflow."""
     try:
         return dict(MlflowClient().get_run(run_id).data.metrics)
     except Exception as exc:  # noqa: BLE001
@@ -95,20 +62,13 @@ def _load_run_metrics(run_id: str) -> dict[str, float]:
 
 
 def export_model(upload: bool = False) -> Path:
-    """Load production model from MLflow Registry and save as pickle.
-
-    Args:
-        upload: If True, upload to Hugging Face Hub after exporting.
-
-    Returns:
-        Path to the saved pickle file.
-    """
+    """Nạp mô hình Production từ MLflow Registry và lưu thành file pickle cục bộ."""
     LOCAL_MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     client = MlflowClient()
 
-    # Get production alias version
+    # 1. Lấy thông tin model version mang alias 'production'
     model_version = client.get_model_version_by_alias(
         name=REGISTERED_MODEL_NAME,
         alias=MODEL_ALIAS,
@@ -123,12 +83,12 @@ def export_model(upload: bool = False) -> Path:
     logger.info(f"Loading model from {model_uri} ...")
     model = _load_any_flavor(model_uri)
 
-    # Save to pickle
+    # 3. Lưu mô hình thành file pickle cục bộ
     joblib.dump(model, LOCAL_MODEL_PATH)
     size_kb = LOCAL_MODEL_PATH.stat().st_size / 1024
     logger.info(f"[OK] Model saved -> {LOCAL_MODEL_PATH} ({size_kb:.1f} KB)")
 
-    # Optional: upload to HF Hub
+    # 4. Tùy chọn tải lên Hugging Face Hub
     if upload:
         _upload_to_hf_hub(LOCAL_MODEL_PATH, model_version)
 
@@ -136,12 +96,7 @@ def export_model(upload: bool = False) -> Path:
 
 
 def _upload_to_hf_hub(model_path: Path, model_version) -> None:
-    """Upload model pickle to Hugging Face Hub model repository.
-
-    Args:
-        model_path: Local path to the pickle file.
-        model_version: MLflow model version object (for metadata).
-    """
+    """Tải file model pickle lên kho lưu trữ Hugging Face Hub."""
     try:
         from huggingface_hub import HfApi
     except ImportError:
@@ -160,7 +115,7 @@ def _upload_to_hf_hub(model_path: Path, model_version) -> None:
 
     api = HfApi(token=hf_token)
 
-    # Create repo if it doesn't exist
+    # Tạo repo trên Hugging Face Hub nếu chưa tồn tại
     api.create_repo(
         repo_id=hf_repo_id,
         repo_type="model",
@@ -169,7 +124,7 @@ def _upload_to_hf_hub(model_path: Path, model_version) -> None:
     )
     logger.info(f"HF Hub repo ready: https://huggingface.co/{hf_repo_id}")
 
-    # Upload model pickle
+    # Tải file pickle lên Hugging Face Hub
     api.upload_file(
         path_or_fileobj=str(model_path),
         path_in_repo=MODEL_ARTIFACT_FILENAME,
@@ -270,11 +225,11 @@ proba = model.predict_proba(X)[:, 1]  # fraud probability
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Export model from MLflow → local + HF Hub")
+    parser = argparse.ArgumentParser(description="Export model from MLflow -> local + HF Hub")
     parser.add_argument(
         "--upload",
         action="store_true",
-        help="Upload to Hugging Face Hub (requires HF_TOKEN and HF_REPO_ID env vars)",
+        help="Tùy chọn tải lên Hugging Face Hub (yêu cầu biến HF_TOKEN và HF_REPO_ID)",
     )
     args = parser.parse_args()
     export_model(upload=args.upload)

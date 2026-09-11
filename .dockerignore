@@ -47,3 +47,6 @@ docs/
 
 # Scripts (only needed for dev, not runtime)
 scripts/
+
+# Generated monitoring reports
+reports/

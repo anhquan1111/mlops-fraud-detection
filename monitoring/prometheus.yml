@@ -1,0 +1,14 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: fraud-api
+    metrics_path: /metrics
+    static_configs:
+      # Service DNS + container port. Host mapping 8000:10000 is irrelevant here.
+      - targets: ["api:10000"]
+

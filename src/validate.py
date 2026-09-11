@@ -1,29 +1,10 @@
-"""Validation gate — compare new model vs production before promoting.
+"""Cổng thẩm định phê duyệt mô hình (Validation Gate).
 
-Workflow:
-    1. Load current production model metrics from MLflow Registry.
-    2. Compare new model metrics vs production.
-    3. Promote if new model is strictly better (or first deployment).
-
-Decision logic (UNCHANGED — the comparison is still against the model currently
-holding the 'production' alias, never against a fixed baseline):
-    - Model MUST meet minimum thresholds: Recall >= 0.80, Precision >= 0.50
-    - Model MUST have PR-AUC >= current production PR-AUC (no regression)
-    - If no production model exists → FIRST_DEPLOYMENT (auto-promote)
-
-All three checks read VALIDATION metrics (`val_*`). The test split is never
-consulted for a promotion decision — see docs/leakage_fix.md. Runs recorded
-under the older protocol logged only bare `pr_auc`, which was computed on the
-test set after early-stopping on that same set; those numbers are not comparable
-with `val_pr_auc`, so a production model lacking `val_pr_auc` is reported as a
-protocol change and handled as a first deployment rather than silently compared.
-
-Usage (standalone):
-    uv run python src/validate.py --run-id <mlflow_run_id>
-
-Usage (in scripts/select_best_model.py):
-    from src.validate import run_validation_gate
-    result = run_validation_gate(run_id, new_metrics, client=client)
+Quy tắc phê duyệt trước khi đưa lên Production:
+1. Từ chối (REJECT) nếu Recall < 0.80 hoặc Precision < 0.50 (Ngưỡng tối thiểu)
+2. Triển khai đầu tiên (FIRST_DEPLOYMENT) nếu chưa có model nào gắn alias 'production'
+3. Từ chối (REJECT) nếu PR-AUC của model mới < PR-AUC của model đang chạy (Chống suy giảm hiệu năng)
+4. Phê duyệt (PROMOTE) nếu PR-AUC model mới >= Production
 """
 
 from __future__ import annotations
@@ -44,18 +25,17 @@ from src.config import (
 
 logger = logging.getLogger(__name__)
 
-# Metric family the gate reads. Promotion decisions are made on validation
-# metrics only; `test_*` exists for reporting and must not drive any branch.
+# Chỉ dùng metrics trên tập Validation để ra quyết định promote; tập Test chỉ để báo cáo
 VAL_METRIC_PREFIX = "val_"
 
 
 # ---------------------------------------------------------------------------
-# Result types
+# Các kiểu dữ liệu kết quả
 # ---------------------------------------------------------------------------
 
 
 class ValidationStatus(StrEnum):
-    """Outcome of the validation gate."""
+    """Trạng thái phê duyệt của Validation Gate."""
 
     PROMOTED = "PROMOTED"  # new model is better → promoted to production
     REJECTED = "REJECTED"  # new model did not pass the gate
@@ -64,15 +44,7 @@ class ValidationStatus(StrEnum):
 
 @dataclass
 class ValidationResult:
-    """Full result returned by the validation gate.
-
-    Attributes:
-        status: PROMOTED | REJECTED | FIRST_DEPLOYMENT
-        new_metrics: Metrics dict for the candidate model.
-        prod_metrics: Metrics dict for the current production model (None if first deploy).
-        reason: Human-readable explanation of the decision.
-        promoted_version: MLflow model version string if promoted, else None.
-    """
+    """Đối tượng lưu trữ kết quả và lý do thẩm định của Validation Gate."""
 
     status: ValidationStatus
     new_metrics: dict[str, float]
@@ -82,22 +54,12 @@ class ValidationResult:
 
 
 # ---------------------------------------------------------------------------
-# Internal helpers
+# Hàm trợ giúp nội bộ
 # ---------------------------------------------------------------------------
 
 
 def _get_production_metrics(client: MlflowClient, model_name: str) -> dict[str, float] | None:
-    """Fetch VALIDATION metrics of the model currently tagged with alias 'production'.
-
-    Args:
-        client: MLflow tracking client.
-        model_name: Registered model name in MLflow Registry.
-
-    Returns:
-        Dict with pr_auc, recall, precision, f1, roc_auc (read from the run's
-        `val_*` metrics), or None if there is no production model, or if it was
-        trained under a protocol that did not record validation metrics.
-    """
+    """Lấy metrics tập Validation của model mang alias 'production' trong MLflow Registry."""
     try:
         prod_version = client.get_model_version_by_alias(model_name, "production")
     except Exception:
@@ -135,14 +97,7 @@ def _get_production_metrics(client: MlflowClient, model_name: str) -> dict[str, 
 
 
 def _check_minimum_thresholds(metrics: dict[str, float]) -> list[str]:
-    """Check if metrics meet the project minimum thresholds.
-
-    Args:
-        metrics: Dict with at minimum 'recall' and 'precision' keys.
-
-    Returns:
-        List of failure reasons (empty list = all thresholds met).
-    """
+    """Kiểm tra mô hình có đạt ngưỡng tối thiểu (Recall >= 0.80, Precision >= 0.50) hay không."""
     failures = []
     if metrics.get("recall", 0.0) < MIN_RECALL:
         failures.append(f"Recall {metrics['recall']:.4f} < {MIN_RECALL} (minimum threshold)")
@@ -154,16 +109,7 @@ def _check_minimum_thresholds(metrics: dict[str, float]) -> list[str]:
 
 
 def _promote_model(client: MlflowClient, run_id: str, model_name: str) -> str:
-    """Register and promote a model run to production in MLflow Registry.
-
-    Args:
-        client: MLflow tracking client.
-        run_id: MLflow run ID of the model to promote.
-        model_name: Registered model name.
-
-    Returns:
-        Model version string that was promoted.
-    """
+    """Đăng ký model vào MLflow Registry và gán alias 'production' cho phiên bản mới."""
     model_uri = f"runs:/{run_id}/model"
     logger.info(f"Registering model from run {run_id} -> {model_name}")
     model_version = mlflow.register_model(model_uri=model_uri, name=model_name)
@@ -179,7 +125,7 @@ def _promote_model(client: MlflowClient, run_id: str, model_name: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Public API
+# Giao diện công khai (Public API)
 # ---------------------------------------------------------------------------
 
 
@@ -190,18 +136,7 @@ def run_validation_gate(
     model_name: str = REGISTERED_MODEL_NAME,
     promote_on_pass: bool = True,
 ) -> ValidationResult:
-    """Main validation gate: compare new model vs production and optionally promote.
-
-    Args:
-        run_id: MLflow run ID of the new candidate model.
-        new_metrics: Metrics dict for the candidate (must have pr_auc, recall, precision).
-        client: MLflow client (created automatically if None).
-        model_name: Registered model name in MLflow Registry.
-        promote_on_pass: If True and model passes, register and promote automatically.
-
-    Returns:
-        ValidationResult with status, metrics comparison, and reason.
-    """
+    """Cổng thẩm định chính: So sánh candidate vs production và tự động promote nếu đạt chuẩn."""
     if client is None:
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
         client = MlflowClient()
@@ -230,7 +165,7 @@ def run_validation_gate(
         )
 
     # ------------------------------------------------------------------
-    # 2. Compare vs production
+    # 2. So sánh với mô hình Production hiện tại
     # ------------------------------------------------------------------
     prod_metrics = _get_production_metrics(client, model_name)
 
@@ -258,7 +193,7 @@ def run_validation_gate(
     )
 
     # ------------------------------------------------------------------
-    # 3. PR-AUC must be >= production (no regression allowed)
+    # 3. Chống suy giảm: PR-AUC model mới phải >= model Production hiện tại
     # ------------------------------------------------------------------
     new_pr_auc = new_metrics.get("pr_auc", 0.0)
     prod_pr_auc = prod_metrics.get("pr_auc", 0.0)
@@ -302,11 +237,7 @@ def run_validation_gate(
 
 
 def print_validation_report(result: ValidationResult) -> None:
-    """Pretty-print the validation gate result.
-
-    Args:
-        result: ValidationResult from run_validation_gate().
-    """
+    """In báo cáo kết quả thẩm định Validation Gate ra terminal theo định dạng bảng."""
     status_icon = {
         ValidationStatus.PROMOTED: "[OK]",
         ValidationStatus.REJECTED: "[!!]",

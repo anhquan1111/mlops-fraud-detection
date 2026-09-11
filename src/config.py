@@ -1,265 +1,152 @@
-"""Central configuration for the MLOps Fraud Detection pipeline.
+from __future__ import annotations
 
-All paths, constants, and hyperparameter defaults are defined here.
-Import from this module to avoid magic strings/numbers scattered across code.
-"""
-
-import os
 from pathlib import Path
+from typing import Any
 
-# ---------------------------------------------------------------------------
-# Project root & data paths
-# ---------------------------------------------------------------------------
+import yaml
+from pydantic import BaseModel, Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-PROJECT_ROOT = Path(__file__).parent.parent
+# --- Đường dẫn gốc ---
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+CONFIGS_DIR = PROJECT_ROOT / "configs"
 DATA_DIR = PROJECT_ROOT / "data"
 DATA_RAW_DIR = DATA_DIR / "raw"
 DATA_PROCESSED_DIR = DATA_DIR / "processed"
-
-RAW_DATA_PATH = DATA_RAW_DIR / "creditcard.csv"
-
 NOTEBOOKS_DIR = PROJECT_ROOT / "notebooks"
 FIGURES_DIR = NOTEBOOKS_DIR / "figures"
-
-# ---------------------------------------------------------------------------
-# MLflow
-# ---------------------------------------------------------------------------
-
-# SQLite backend — required by MLflow 3.x (file store deprecated)
-MLFLOW_TRACKING_URI = f"sqlite:///{PROJECT_ROOT / 'mlflow.db'}"
-MLFLOW_EXPERIMENT_NAME = "fraud-detection"
-
-# ---------------------------------------------------------------------------
-# Dataset schema
-# ---------------------------------------------------------------------------
-
-TARGET_COL = "Class"
-
-# V1–V28 are PCA-transformed features (anonymized)
-PCA_FEATURES: list[str] = [f"V{i}" for i in range(1, 29)]
-
-# Amount is the only non-PCA feature kept (Time is dropped for baseline)
-NUMERIC_FEATURES: list[str] = PCA_FEATURES + ["Amount"]
-
-# All features used for modelling
-FEATURE_COLS: list[str] = NUMERIC_FEATURES  # Time is dropped in preprocessing
-
-# ---------------------------------------------------------------------------
-# Preprocessing
-# ---------------------------------------------------------------------------
-
-AMOUNT_SCALER_FEATURE = "Amount"  # only feature that needs scaling in baseline
-
-# StandardScaler statistics for `Amount`, fitted on the TRAINING SPLIT ONLY
-# (64% of the data, RANDOM_STATE=42). src/api.py applies these at serve time
-# because the deployed artifact is the bare estimator, not a full pipeline.
-#
-# ⚠️ These MUST be regenerated whenever the split or RANDOM_STATE changes:
-#     uv run python src/train.py   (prints the fitted values)
-# tests/test_features.py asserts they match the scaler fitted from the raw CSV
-# when it is available, so drift here fails the test suite rather than silently
-# skewing production scores.
-
-AMOUNT_MEAN: float = 87.9702
-AMOUNT_STD: float = 245.5762
-
-# ---------------------------------------------------------------------------
-# Train / validation / test split
-# ---------------------------------------------------------------------------
-# Three-way split, stratified at every step, so that the test set is touched
-# exactly once — at final reporting.
-#
-#   test  = TEST_SIZE of the full dataset                  -> 20%
-#   val   = VAL_SIZE of what remains after test is removed -> 0.2 * 0.8 = 16%
-#   train = the rest                                       -> 64%
-#
-# Early stopping and champion selection both run on val. Using test for either
-# leaks the test set into model selection and inflates the reported metrics —
-# see docs/leakage_fix.md.
-
-TEST_SIZE: float = 0.2
-VAL_SIZE: float = 0.2  # fraction of the post-test remainder, NOT of the full set
-RANDOM_STATE: int = 42
-
-# ---------------------------------------------------------------------------
-# Decision threshold
-# ---------------------------------------------------------------------------
-# The operating point: probability at or above which a transaction is flagged.
-#
-# ⚠️ This is a BUSINESS decision, not a technical one — it prices a missed fraud
-# against an analyst's review time. See AGENTS.md.
-#
-# It is read from the DECISION_THRESHOLD environment variable so the operations
-# team can move the operating point without a code change, an image rebuild, or
-# a retrain. The value is read once at import, i.e. at process startup, so a
-# running server keeps the threshold it started with — restart to apply a change.
-#
-# Default 0.50 is a neutral placeholder, deliberately not tuned.
-# Measured alternative: 0.81, selected on validation and verified once on test
-# (docs/leakage_fix.md §5.2) — on the test split it gives up 2 frauds to remove
-# 69 false alarms and lifts precision from 0.4555 to 0.7083. Adopting it is the
-# operations team's call, so it is documented rather than set here.
-
-_DEFAULT_DECISION_THRESHOLD = 0.5
+MODELS_DIR = PROJECT_ROOT / "models"
 
 
-def _load_decision_threshold() -> float:
-    """Read DECISION_THRESHOLD from the environment, validating it.
+# --- 1. Runtime Settings (Đọc từ .env / Environment Variables) ---
+class AppSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=str(PROJECT_ROOT / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
-    Returns:
-        The configured threshold, or 0.5 when the variable is unset or blank.
+    MLFLOW_TRACKING_URI: str = Field(default="")
+    FRAUD_REPORTS_DIR: str = Field(default="")
+    DECISION_THRESHOLD: float = 0.5
+    MLFLOW_EXPERIMENT_NAME: str = "fraud-detection"
+    AWS_S3_BUCKET: str = ""
+    AWS_DEFAULT_REGION: str = "us-east-1"
 
-    Raises:
-        ValueError: If the variable is set but is not a number strictly between
-            0 and 1. Failing loudly is deliberate: an operator who sets a
-            malformed threshold intended to change the operating point, and
-            silently serving 0.5 instead would hide that from them.
-    """
-    raw = os.environ.get("DECISION_THRESHOLD")
-    if raw is None or not raw.strip():
-        return _DEFAULT_DECISION_THRESHOLD
+    @field_validator("MLFLOW_TRACKING_URI", mode="before")
+    @classmethod
+    def _default_mlflow_uri(cls, v: Any) -> str:
+        if v and str(v).strip():
+            return str(v).strip()
+        return f"sqlite:///{PROJECT_ROOT / 'mlflow.db'}"
 
-    try:
-        value = float(raw)
-    except ValueError as exc:
-        raise ValueError(
-            f"DECISION_THRESHOLD={raw!r} is not a number. "
-            "Set it to a value strictly between 0 and 1, e.g. 0.81."
-        ) from exc
+    @field_validator("FRAUD_REPORTS_DIR", mode="before")
+    @classmethod
+    def _default_reports_dir(cls, v: Any) -> str:
+        if v and str(v).strip():
+            return str(Path(str(v)).resolve())
+        return str((PROJECT_ROOT / "reports").resolve())
 
-    if not 0.0 < value < 1.0:
-        raise ValueError(
-            f"DECISION_THRESHOLD={value} is out of range. "
-            "It must be strictly between 0 and 1 — 0 would flag every "
-            "transaction and 1 would flag none."
-        )
-    return value
+    @field_validator("DECISION_THRESHOLD", mode="before")
+    @classmethod
+    def _validate_decision_threshold(cls, v: Any) -> float:
+        if v is None:
+            return 0.5
+        if isinstance(v, str):
+            trimmed = v.strip()
+            if not trimmed:
+                return 0.5
+            try:
+                val = float(trimmed)
+            except ValueError as exc:
+                raise ValueError(
+                    f"DECISION_THRESHOLD={v!r} is not a number. "
+                    "Set it to a value strictly between 0 and 1, e.g. 0.81."
+                ) from exc
+        else:
+            try:
+                val = float(v)
+            except (ValueError, TypeError) as exc:
+                raise ValueError(
+                    f"DECISION_THRESHOLD={v!r} is not a number. "
+                    "Set it to a value strictly between 0 and 1, e.g. 0.81."
+                ) from exc
+
+        if not 0.0 < val < 1.0:
+            raise ValueError(
+                f"DECISION_THRESHOLD={val} is out of range. "
+                "It must be strictly between 0 and 1."
+            )
+        return val
 
 
-DECISION_THRESHOLD: float = _load_decision_threshold()
+# --- 2. Data & Feature Schema (Đọc từ configs/data.yaml) ---
+class DataConfig(BaseModel):
+    raw_data_path: str
+    target_col: str = "Class"
+    test_size: float = 0.2
+    val_size: float = 0.2
+    random_state: int = 42
+    pca_features: list[str]
+    amount_feature: str = "Amount"
+    amount_mean: float = 87.9702
+    amount_std: float = 245.5762
 
-# ---------------------------------------------------------------------------
-# Logistic Regression baseline hyperparameters
-# ---------------------------------------------------------------------------
+    @property
+    def numeric_features(self) -> list[str]:
+        return self.pca_features + [self.amount_feature]
 
-LR_PARAMS: dict = {
-    "class_weight": "balanced",
-    "max_iter": 1000,
-    "random_state": RANDOM_STATE,
-    "solver": "lbfgs",
-}
 
-# ---------------------------------------------------------------------------
-# XGBoost base hyperparameters
-# ---------------------------------------------------------------------------
-# scale_pos_weight = n_negative / n_positive — computed dynamically in train.py
+# --- 3. Model Hyperparameters & Thresholds (Đọc từ configs/models.yaml) ---
+class ModelConfig(BaseModel):
+    registered_model_name: str = "fraud-detection-model"
+    model_artifact_filename: str = "baseline_lr.pkl"
+    min_recall: float = 0.80
+    min_precision: float = 0.50
+    logistic_regression: dict[str, Any]
+    xgboost_base_params: dict[str, Any]
+    xgboost_grid: list[dict[str, Any]]
+    lightgbm_base_params: dict[str, Any]
+    lightgbm_grid: list[dict[str, Any]]
 
-XGBOOST_BASE_PARAMS: dict = {
-    "eval_metric": "aucpr",  # optimize for PR-AUC
-    "random_state": RANDOM_STATE,
-    "n_jobs": -1,
-    "tree_method": "hist",  # faster than exact
-    "early_stopping_rounds": 20,  # stop if no improvement for 20 rounds
-}
 
-# Experiment grid: list of param dicts (merged with base)
-XGBOOST_GRID: list[dict] = [
-    {
-        "n_estimators": 100,
-        "max_depth": 6,
-        "learning_rate": 0.1,
-        "subsample": 1.0,
-        "colsample_bytree": 1.0,
-        "run_name": "xgb_default",
-    },
-    {
-        "n_estimators": 200,
-        "max_depth": 8,
-        "learning_rate": 0.05,
-        "subsample": 1.0,
-        "colsample_bytree": 0.8,
-        "run_name": "xgb_deep",
-    },
-    {
-        "n_estimators": 300,
-        "max_depth": 6,
-        "learning_rate": 0.05,
-        "subsample": 0.8,
-        "colsample_bytree": 0.8,
-        "run_name": "xgb_regularized",
-    },
-]
+def _load_yaml(path: Path) -> dict[str, Any]:
+    with open(path, encoding="utf-8") as f:
+        return yaml.safe_load(f)
 
-# ---------------------------------------------------------------------------
-# LightGBM base hyperparameters
-# ---------------------------------------------------------------------------
-# ⚠️  Do NOT use scale_pos_weight with LightGBM at very high ratios (e.g. 577).
-#    At such extreme ratios, LGBM's internal re-weighting destabilises leaf
-#    splits and produces near-random PR-AUC (~0.09).  Use class_weight='balanced'
-#    instead — it applies per-sample weights through sklearn's API and is
-#    stable across all imbalance ratios.
 
-LIGHTGBM_BASE_PARAMS: dict = {
-    "class_weight": "balanced",  # imbalance fix — stable at any ratio
-    "metric": "average_precision",  # PR-AUC equivalent in LGBM
-    "random_state": RANDOM_STATE,
-    "n_jobs": -1,
-    "verbose": -1,  # suppress LGBM output
-}
+# --- Khởi tạo instances ---
+settings = AppSettings()
+data_config = DataConfig(**_load_yaml(CONFIGS_DIR / "data.yaml"))
+model_config = ModelConfig(**_load_yaml(CONFIGS_DIR / "models.yaml"))
 
-# Experiment grid: list of param dicts (merged with base)
-LIGHTGBM_GRID: list[dict] = [
-    {
-        "n_estimators": 100,
-        "max_depth": 6,
-        "learning_rate": 0.1,
-        "num_leaves": 31,
-        "subsample": 1.0,
-        "colsample_bytree": 1.0,
-        "run_name": "lgbm_default",
-    },
-    {
-        "n_estimators": 300,
-        "max_depth": -1,  # -1 = no limit (LGBM default)
-        "learning_rate": 0.05,
-        "num_leaves": 63,
-        "subsample": 0.9,
-        "colsample_bytree": 0.8,
-        "run_name": "lgbm_large",
-    },
-    {
-        "n_estimators": 300,
-        "max_depth": -1,
-        "learning_rate": 0.05,
-        "num_leaves": 31,
-        "subsample": 0.8,
-        "colsample_bytree": 0.8,
-        "min_child_samples": 5,  # lower = less regularization, better for rare class
-        "run_name": "lgbm_regularized",
-    },
-]
+# --- Khai báo hằng số tương thích ngược cho toàn pipeline ---
+REPORTS_DIR = Path(settings.FRAUD_REPORTS_DIR)
+MLFLOW_TRACKING_URI = settings.MLFLOW_TRACKING_URI
+MLFLOW_EXPERIMENT_NAME = settings.MLFLOW_EXPERIMENT_NAME
+DECISION_THRESHOLD = settings.DECISION_THRESHOLD
 
-# ---------------------------------------------------------------------------
-# MLflow Model Registry
-# ---------------------------------------------------------------------------
+RAW_DATA_PATH = PROJECT_ROOT / data_config.raw_data_path
+TARGET_COL = data_config.target_col
+TEST_SIZE = data_config.test_size
+VAL_SIZE = data_config.val_size
+RANDOM_STATE = data_config.random_state
+PCA_FEATURES = data_config.pca_features
+NUMERIC_FEATURES = data_config.numeric_features
+FEATURE_COLS = NUMERIC_FEATURES
 
-REGISTERED_MODEL_NAME: str = "fraud-detection-model"
+AMOUNT_SCALER_FEATURE = data_config.amount_feature
+AMOUNT_MEAN = data_config.amount_mean
+AMOUNT_STD = data_config.amount_std
 
-# ---------------------------------------------------------------------------
-# Deployment artifact
-# ---------------------------------------------------------------------------
-# Filename of the exported champion pickle, both locally and on the Hugging Face
-# Hub. scripts/export_model.py writes it, src/api.py downloads it — they MUST
-# agree, so both import this constant instead of hard-coding a literal.
-# The historical name is "baseline_lr.pkl"; the live HF repo still serves that
-# filename, so changing it requires re-uploading before redeploying.
+REGISTERED_MODEL_NAME = model_config.registered_model_name
+MODEL_ARTIFACT_FILENAME = model_config.model_artifact_filename
+LOCAL_MODEL_PATH = MODELS_DIR / MODEL_ARTIFACT_FILENAME
+MIN_RECALL = model_config.min_recall
+MIN_PRECISION = model_config.min_precision
 
-MODEL_ARTIFACT_FILENAME: str = "baseline_lr.pkl"
-LOCAL_MODEL_PATH = PROJECT_ROOT / "models" / MODEL_ARTIFACT_FILENAME
-
-# ---------------------------------------------------------------------------
-# Success thresholds (from AGENTS.md)
-# ---------------------------------------------------------------------------
-
-MIN_RECALL: float = 0.80
-MIN_PRECISION: float = 0.50
+LR_PARAMS = model_config.logistic_regression
+XGBOOST_BASE_PARAMS = model_config.xgboost_base_params
+XGBOOST_GRID = model_config.xgboost_grid
+LIGHTGBM_BASE_PARAMS = model_config.lightgbm_base_params
+LIGHTGBM_GRID = model_config.lightgbm_grid

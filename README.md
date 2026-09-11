@@ -1,14 +1,21 @@
 # 🔍 MLOps Fraud Detection Pipeline
 
+**English** | [Tiếng Việt](README.vi.md)
+
 [![CI](https://github.com/anhquan1111/mlops-fraud-detection/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/anhquan1111/mlops-fraud-detection/actions/workflows/ci.yml)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/license/mit)
 [![MLflow](https://img.shields.io/badge/tracking-MLflow-0194E2.svg)](https://mlflow.org/)
 [![FastAPI](https://img.shields.io/badge/API-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
 [![Live Demo](https://img.shields.io/badge/Live%20Dashboard-Render-46E3B7?style=flat&logo=render)](https://mlops-fraud-detection-g7c7.onrender.com)
 
 End-to-end MLOps pipeline for **real-time credit card fraud detection** on a severely imbalanced dataset (~0.17% fraud). Built with LightGBM, MLflow experiment tracking, FastAPI serving, Docker, and GitHub Actions CI/CD.
+
+**Local monitoring update (2026-09-10):** raw-input quality checks, Prometheus metrics,
+Evidently batch reports and delayed-label audits. Start with the Vietnamese
+[review and code walkthrough](docs/review_day4.md) for runnable commands, regression findings,
+and verification limits. AWS setup remains deferred.
 
 🌐 **Live Interactive Dashboard:** [https://mlops-fraud-detection-g7c7.onrender.com](https://mlops-fraud-detection-g7c7.onrender.com)  
 ⚡ **Swagger API Docs:** [https://mlops-fraud-detection-g7c7.onrender.com/docs](https://mlops-fraud-detection-g7c7.onrender.com/docs)
@@ -67,7 +74,7 @@ End-to-end MLOps pipeline for **real-time credit card fraud detection** on a sev
 ```mermaid
 flowchart TD
     A[📦 Kaggle Dataset\n284,807 transactions] --> B[Feature Engineering\nsrc/features.py]
-    B --> C[Stratified Train/Test Split\n80% / 20%]
+    B --> C[Stratified Train/Val/Test Split\n64% / 16% / 20%]
     C --> D[Train Models\nsrc/train.py]
 
     D --> D1[Logistic Regression\nbaseline]
@@ -83,7 +90,7 @@ flowchart TD
 
     J[GitHub Push] --> K[GitHub Actions CI]
     K --> K1[ruff lint + format]
-    K --> K2[pytest 88 tests]
+    K --> K2[pytest API + pipeline + monitoring]
     K --> K3[pipeline smoke test]
 ```
 
@@ -236,18 +243,72 @@ curl http://localhost:8000/health
 
 ## 🐳 Docker
 
-### Build & run locally
+### Run the full local monitoring stack
+
+```powershell
+# The default expects models/fraud_model.pkl.
+# If it is absent, export a model first and set MODEL_FILENAME in .env.
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+
+docker compose config --quiet
+docker compose up -d --build
+docker compose ps
+```
+
+The stack is bound to localhost:
+
+| Service | URL | Purpose |
+|---|---|---|
+| FastAPI | <http://127.0.0.1:8000/docs> | Send prediction requests |
+| Prometheus | <http://127.0.0.1:9090/targets> | Verify the `fraud-api` target is UP |
+| Grafana | <http://127.0.0.1:3000> | Open `Fraud Detection API - Overview` |
+
+Grafana uses `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` from `.env`; the example
+defaults to `admin` / `fraud-local-only` for localhost only. Prometheus reaches the API through
+Compose DNS at `api:10000`; `8000` is only the host-side port. The model and Grafana/Prometheus
+data are mounted rather than baked into the API image.
+
+Useful checks:
+
+```powershell
+curl.exe http://127.0.0.1:8000/ready
+curl.exe http://127.0.0.1:8000/metrics
+docker compose exec prometheus promtool check config /etc/prometheus/prometheus.yml
+docker compose exec prometheus promtool check rules /etc/prometheus/alerts.yml
+docker compose logs --tail=50 api prometheus grafana
+```
+
+Stop containers while preserving dashboard history:
 
 ```bash
-# 1. Export model to models/baseline_lr.pkl first (if using local pkl strategy)
-uv run python scripts/export_model.py
-
-# 2. Build Docker image
-docker build -t fraud-detection .
-
-# 3. Run container
-docker run -p 8000:8000 fraud-detection
+docker compose down
 ```
+
+`docker compose down --volumes` also removes local Prometheus history, Grafana users and UI
+state. The provisioned dashboard JSON remains in Git. Alert rules appear in Prometheus, but no
+Alertmanager or notification channel is configured.
+
+Configuration lives in `compose.yaml` and `monitoring/`. Grafana provisions the Prometheus data
+source and five-panel dashboard automatically; you do not need to create them by hand.
+
+### Observability preview
+
+Prometheus scrapes the FastAPI `/metrics` endpoint through the internal Compose network. The
+target page below is the fastest check that metrics collection is working end to end.
+
+![Prometheus fraud-api target is up](docs/figures/prometheus_targets.png)
+
+Grafana is provisioned from files in Git and opens with service health, prediction traffic, 5xx
+ratio, p95 latency, and in-flight request panels. The screenshot contains fresh local prediction
+traffic generated against the running stack.
+
+![Grafana Fraud Detection API overview](docs/figures/grafana_dashboard.png)
+
+Evidently covers a different layer: offline feature-distribution monitoring. Generate a report
+with `scripts/monitor_local.py`, then use it together with delayed labels and service telemetry
+when investigating model behavior.
+
+![Evidently feature drift report](docs/figures/evidently_drift_report.png)
 
 ### Deploy to Render
 
@@ -333,7 +394,7 @@ Pydantic validation, DataFrame construction — dominates single-transaction lat
 ## 🧪 Testing & Linting
 
 ```bash
-# Run all tests (88 tests)
+# Run all tests (see docs/review_day4.md for the latest verified result)
 uv run pytest tests/ -v
 
 # Lint check
@@ -345,14 +406,16 @@ uv run ruff format src/ tests/ scripts/
 
 ### Test coverage
 
-| Test file | Tests | Scope |
-|-----------|-------|-------|
-| `tests/test_features.py` | 27 | Feature engineering, three-way split, train-only scaler |
-| `tests/test_api.py` | 20 | FastAPI endpoints, request/response validation |
-| `tests/test_config.py` | 14 | `DECISION_THRESHOLD` environment override and validation |
-| `tests/test_evaluate.py` | 14 | Metrics computation, edge cases |
-| `tests/test_validate.py` | 13 | Validation gate logic, promotion, protocol change |
-| **Total** | **88** | |
+| Test file | Scope |
+|-----------|-------|
+| `tests/test_features.py` | Feature engineering, three-way split, train-only scaler |
+| `tests/test_api.py` | Request/response validation, finite input, latest report status |
+| `tests/test_config.py` | Decision threshold and MLflow environment overrides |
+| `tests/test_evaluate.py` | Metrics computation and edge cases |
+| `tests/test_validate.py` | Validation gate and mocked promotion |
+| `tests/test_quality.py`, `tests/test_review_regressions.py` | Raw Amount regression, schema and error handling |
+| `tests/test_monitor.py`, `tests/test_monitor_cli.py` | Reference provenance, drift, delayed labels and local CLI |
+| `tests/test_metrics.py`, `tests/test_storage.py` | HTTP metrics and mocked S3 operations |
 
 Eleven of the `test_features.py` tests exist specifically to stop the two data leaks from
 returning: `preprocess()` must leave `Amount` raw, the fitted scaler must have seen only the
@@ -365,6 +428,7 @@ single row into or out of the test set.
 
 ```
 mlops-fraud-detection/
+├── compose.yaml              # Local API + Prometheus + Grafana stack
 ├── src/                      # Source code
 │   ├── __init__.py
 │   ├── config.py             # Central config: paths, hyperparameters, thresholds
@@ -372,19 +436,27 @@ mlops-fraud-detection/
 │   ├── train.py              # Full 7-run experiment pipeline
 │   ├── evaluate.py           # Metrics: PR-AUC, Recall, Precision, F1, ROC-AUC
 │   ├── validate.py           # Model validation gate (new vs production)
-│   └── api.py                # FastAPI app: /predict, /predict/batch, /health
+│   ├── api.py                # Prediction, health/readiness, metrics and report endpoints
+│   ├── quality.py            # Raw transaction quality gate
+│   ├── metrics.py            # Single-worker Prometheus HTTP metrics
+│   ├── monitor.py            # Reference, feature drift and delayed-label audit
+│   └── storage.py            # Optional S3 helpers (AWS setup deferred)
 ├── scripts/
 │   ├── benchmark_model_load.py  # Cold vs warm model-load timing (HF Hub)
 │   ├── export_model.py          # Export MLflow model → local .pkl for Docker
 │   ├── register_model.py        # DEPRECATED — superseded by select_best_model.py
 │   ├── select_best_model.py     # Rank by val PR-AUC → validation gate → promote
 │   └── select_threshold.py      # Choose threshold on val, verify once on test
-├── tests/                    # pytest test suite (88 tests)
+├── tests/                    # pytest regression and integration suite
 ├── notebooks/
 │   └── 01_eda.py             # EDA: class distribution, feature correlation, PCA
 ├── docs/
 │   ├── architecture.md       # Architecture design decisions
 │   └── model_card.md         # Model Card (evaluation, limitations, ethics)
+├── monitoring/
+│   ├── prometheus.yml        # Scrape API metrics through Compose DNS
+│   ├── alerts.yml            # Local Prometheus rule evaluation
+│   └── grafana/              # Provisioned data source and dashboard JSON
 ├── data/                     # Data directory (gitignored)
 │   └── raw/creditcard.csv    # Download from Kaggle
 ├── models/                   # Exported model files (gitignored)
@@ -445,4 +517,4 @@ mlops-fraud-detection/
 
 ## 📜 License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see the [MIT License](https://opensource.org/license/mit).

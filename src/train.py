@@ -1,26 +1,14 @@
-"""Training pipeline for the fraud detection models.
+"""Pipeline huấn luyện mô hình Fraud Detection.
 
-Usage:
-    uv run python src/train.py
-
-Pipeline:
-    1. Load & preprocess data (src/features.py)
-    2. Stratified 64/16/20 train/val/test split — test carved out FIRST
-    3. Fit the Amount scaler on TRAIN ONLY, apply to val and test
-    4. Train Logistic Regression baseline  -> MLflow run
-    5. Train XGBoost grid (3 configs)      -> MLflow runs
-    6. Train LightGBM grid (3 configs)     -> MLflow runs
-    7. Print summary table of all runs
-
-Total: 1 baseline + 3 XGBoost + 3 LightGBM = 7 runs.
-
-Evaluation protocol (see docs/leakage_fix.md):
-    - Early stopping uses the VALIDATION set. Using test here would let the test
-      set choose the number of boosting rounds.
-    - Champion selection uses `val_pr_auc` (scripts/select_best_model.py).
-    - The TEST set is scored once per run purely for the final report and is
-      never consulted for any decision.
-    Both metric families are logged: `val_*` and `test_*`.
+Quy trình chuẩn chống rò rỉ dữ liệu (Leak-free):
+1. Nạp và tiền xử lý dữ liệu (src/features.py)
+2. Chia 3 tập Stratified 64/16/20 (Train / Val / Test)
+3. Fit Amount scaler DUY NHẤT trên tập Train
+4. Huấn luyện Baseline (Logistic Regression)
+5. Huấn luyện Grid Search XGBoost (3 configs) kèm Early Stopping trên Val
+6. Huấn luyện Grid Search LightGBM (3 configs) kèm Early Stopping trên Val
+7. Log metrics, biểu đồ PR-curve và artifact lên MLflow
+8. Xếp hạng model dựa trên Validation PR-AUC
 """
 
 import logging
@@ -61,7 +49,7 @@ from src.features import (
 )
 
 # ---------------------------------------------------------------------------
-# Logging setup
+# Cấu hình Logging
 # ---------------------------------------------------------------------------
 
 logging.basicConfig(
@@ -73,19 +61,12 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Hàm trợ giúp
 # ---------------------------------------------------------------------------
 
 
 def _compute_scale_pos_weight(y_train: pd.Series) -> float:
-    """Compute scale_pos_weight = n_negative / n_positive for XGBoost.
-
-    Args:
-        y_train: Training labels (0 = legit, 1 = fraud).
-
-    Returns:
-        Float ratio used to handle class imbalance in XGBoost.
-    """
+    """Tính tỷ lệ mẫu âm / dương (scale_pos_weight) để cân bằng trọng số cho XGBoost."""
     n_negative = int((y_train == 0).sum())
     n_positive = int((y_train == 1).sum())
     ratio = n_negative / n_positive
@@ -101,7 +82,7 @@ def _log_split_params(
     y_val: pd.Series,
     y_test: pd.Series,
 ) -> None:
-    """Record the split shape on the active MLflow run, for reproducibility."""
+    """Ghi log kích thước và số ca gian lận từng tập (Train/Val/Test) lên MLflow."""
     mlflow.log_param("threshold", DECISION_THRESHOLD)
     mlflow.log_param("test_size", TEST_SIZE)
     mlflow.log_param("val_size", VAL_SIZE)
@@ -123,20 +104,7 @@ def _evaluate_and_log(
     y_test: pd.Series,
     display_name: str,
 ) -> dict[str, float]:
-    """Score on val and test, log both metric families, return the merged dict.
-
-    `val_*` drives early stopping, the validation gate and champion selection.
-    `test_*` is reported only — nothing in the pipeline branches on it.
-
-    Args:
-        model: Fitted classifier.
-        X_val / y_val: Validation split.
-        X_test / y_test: Held-out test split.
-        display_name: Label used in the printed report.
-
-    Returns:
-        Dict with `val_*` and `test_*` keys (plus threshold).
-    """
+    """Đánh giá mô hình trên tập Val và Test, sau đó log toàn bộ metrics lên MLflow."""
     val_metrics = evaluate_model(model, X_val, y_val, threshold=DECISION_THRESHOLD)
     test_metrics = evaluate_model(model, X_test, y_test, threshold=DECISION_THRESHOLD)
 
@@ -156,7 +124,7 @@ def _evaluate_and_log(
 
 
 # ---------------------------------------------------------------------------
-# Baseline: Logistic Regression
+# Huấn luyện Baseline: Logistic Regression
 # ---------------------------------------------------------------------------
 
 
@@ -168,15 +136,7 @@ def train_baseline(
     y_val: pd.Series,
     y_test: pd.Series,
 ) -> dict[str, float]:
-    """Train Logistic Regression baseline and log to MLflow.
-
-    Args:
-        X_train / X_val / X_test: Feature splits (Amount already scaled).
-        y_train / y_val / y_test: Label splits.
-
-    Returns:
-        Dictionary of val_* and test_* evaluation metrics.
-    """
+    """Huấn luyện mô hình cơ sở Logistic Regression và log artifact lên MLflow."""
     logger.info("=" * 60)
     logger.info("Training: Logistic Regression (Baseline)")
     logger.info("=" * 60)
@@ -215,7 +175,7 @@ def train_baseline(
 
 
 # ---------------------------------------------------------------------------
-# XGBoost training
+# Huấn luyện XGBoost
 # ---------------------------------------------------------------------------
 
 
@@ -229,26 +189,13 @@ def train_xgboost(
     grid_params: dict,
     scale_pos_weight: float,
 ) -> dict[str, float]:
-    """Train one XGBoost run with given params and log to MLflow.
-
-    Early stopping watches the VALIDATION split (eval_metric 'aucpr' is
-    XGBoost's name for average precision / PR-AUC).
-
-    Args:
-        X_train / X_val / X_test: Feature splits.
-        y_train / y_val / y_test: Label splits.
-        grid_params: Experiment-specific params from XGBOOST_GRID (includes run_name).
-        scale_pos_weight: Class imbalance ratio (n_neg / n_pos), computed on train.
-
-    Returns:
-        Dictionary of val_* and test_* evaluation metrics.
-    """
+    """Huấn luyện XGBoost với Early Stopping trên tập Val và log artifact lên MLflow."""
     run_name = grid_params.pop("run_name", "xgboost")
     logger.info("=" * 60)
     logger.info(f"Training: XGBoost -- {run_name}")
     logger.info("=" * 60)
 
-    # Merge base + grid params, add scale_pos_weight
+    # Gộp tham số cấu hình và bổ sung scale_pos_weight
     params = {**XGBOOST_BASE_PARAMS, **grid_params, "scale_pos_weight": scale_pos_weight}
 
     with mlflow.start_run(run_name=run_name) as run:
@@ -268,7 +215,7 @@ def train_xgboost(
         model.fit(
             X_train,
             y_train,
-            eval_set=[(X_val, y_val)],  # VAL, never test
+            eval_set=[(X_val, y_val)],  # Giám sát trên tập Val, không dùng tập Test
             verbose=False,
         )
         logger.info(f"XGBoost training complete (best iteration: {model.best_iteration})")
@@ -295,7 +242,7 @@ def train_xgboost(
 
 
 # ---------------------------------------------------------------------------
-# LightGBM training
+# Huấn luyện LightGBM
 # ---------------------------------------------------------------------------
 
 
@@ -308,20 +255,7 @@ def train_lightgbm(
     y_test: pd.Series,
     grid_params: dict,
 ) -> dict[str, float]:
-    """Train one LightGBM run with given params and log to MLflow.
-
-    Uses class_weight='balanced' (from LIGHTGBM_BASE_PARAMS) to handle imbalance.
-    scale_pos_weight is NOT used for LGBM — at ratio ~577 it destabilises splits.
-    Early stopping watches the VALIDATION split.
-
-    Args:
-        X_train / X_val / X_test: Feature splits.
-        y_train / y_val / y_test: Label splits.
-        grid_params: Experiment-specific params from LIGHTGBM_GRID (includes run_name).
-
-    Returns:
-        Dictionary of val_* and test_* evaluation metrics.
-    """
+    """Huấn luyện LightGBM với class_weight='balanced' và Early Stopping trên Val."""
     import lightgbm as lgb
 
     run_name = grid_params.pop("run_name", "lightgbm")
@@ -349,10 +283,10 @@ def train_lightgbm(
         model.fit(
             X_train,
             y_train,
-            eval_set=[(X_val, y_val)],  # VAL, never test
+            eval_set=[(X_val, y_val)],  # Giám sát trên tập Val, không dùng tập Test
             callbacks=[
                 lgb.early_stopping(stopping_rounds=30, verbose=False),
-                lgb.log_evaluation(period=0),  # suppress per-iteration logs
+                lgb.log_evaluation(period=0),  # Tắt log chi tiết từng vòng lặp
             ],
         )
         best_iter = (
@@ -379,19 +313,12 @@ def train_lightgbm(
 
 
 # ---------------------------------------------------------------------------
-# Summary table
+# Bảng tổng kết thực nghiệm
 # ---------------------------------------------------------------------------
 
 
 def _print_summary(results: list[dict]) -> None:
-    """Print a comparison table of all runs, ranked by VALIDATION PR-AUC.
-
-    The ranking column is deliberately `val_pr_auc`: ranking by test PR-AUC would
-    reintroduce exactly the selection leak this pipeline was rewritten to remove.
-
-    Args:
-        results: List of dicts with run_name, model_type and val_*/test_* metrics.
-    """
+    """In bảng tổng hợp so sánh tất cả các run, sắp xếp theo Validation PR-AUC."""
     print("\n" + "=" * 96)
     print("  EXPERIMENT SUMMARY -- All Runs (ranked by VAL PR-AUC; test shown for reference only)")
     print("=" * 96)
@@ -440,16 +367,16 @@ def _print_summary(results: list[dict]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Main entry point
+# Điểm khởi chạy chính
 # ---------------------------------------------------------------------------
 
 
 def main() -> None:
-    """Run full experiment: baseline + XGBoost grid + LightGBM grid."""
+    """Chạy toàn bộ pipeline: Baseline LR -> Grid XGBoost -> Grid LightGBM."""
     logger.info("[>>] Multi-model fraud detection experiment (leak-free protocol)")
 
     # ------------------------------------------------------------------
-    # 1. Load, preprocess, split -- SPLIT BEFORE ANY FITTED TRANSFORM
+    # 1. Nạp, tiền xử lý và chia dữ liệu (chia tập trước khi fit scaler)
     # ------------------------------------------------------------------
     logger.info("Loading and preprocessing data ...")
     df = load_data(RAW_DATA_PATH)
@@ -457,7 +384,7 @@ def main() -> None:
     X_train, X_val, X_test, y_train, y_val, y_test = split_data(X, y)
 
     # ------------------------------------------------------------------
-    # 2. Fit the Amount scaler on TRAIN ONLY, then apply to every split
+    # 2. Fit Amount scaler DUY NHẤT trên tập Train, sau đó áp dụng cho cả 3 tập
     # ------------------------------------------------------------------
     scaler = fit_amount_scaler(X_train)
     X_train = apply_amount_scaler(scaler, X_train)
@@ -471,7 +398,7 @@ def main() -> None:
     scale_pos_weight = _compute_scale_pos_weight(y_train)
 
     # ------------------------------------------------------------------
-    # 3. MLflow setup
+    # 3. Thiết lập kết nối MLflow
     # ------------------------------------------------------------------
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
@@ -480,13 +407,13 @@ def main() -> None:
     splits = (X_train, X_val, X_test, y_train, y_val, y_test)
 
     # ------------------------------------------------------------------
-    # 4. Baseline: Logistic Regression
+    # 4. Huấn luyện Baseline Logistic Regression
     # ------------------------------------------------------------------
     metrics = train_baseline(*splits)
     results.append({"run_name": "lr_baseline", "model_type": "logistic_regression", **metrics})
 
     # ------------------------------------------------------------------
-    # 5. XGBoost grid (3 runs)
+    # 5. Huấn luyện Grid Search XGBoost (3 cấu hình)
     # ------------------------------------------------------------------
     logger.info("Starting XGBoost experiment grid (3 runs) ...")
     import copy
@@ -497,7 +424,7 @@ def main() -> None:
         results.append({"run_name": run_name, "model_type": "xgboost", **metrics})
 
     # ------------------------------------------------------------------
-    # 6. LightGBM grid (3 runs)
+    # 6. Huấn luyện Grid Search LightGBM (3 cấu hình)
     # ------------------------------------------------------------------
     logger.info("Starting LightGBM experiment grid (3 runs) ...")
     for grid_params in copy.deepcopy(LIGHTGBM_GRID):
@@ -506,12 +433,12 @@ def main() -> None:
         results.append({"run_name": run_name, "model_type": "lightgbm", **metrics})
 
     # ------------------------------------------------------------------
-    # 7. Print summary
+    # 7. In bảng tổng kết thực nghiệm
     # ------------------------------------------------------------------
     _print_summary(results)
 
     # ------------------------------------------------------------------
-    # 8. Exit check -- at least one model must clear the thresholds ON VAL
+    # 8. Kiểm tra điều kiện tối thiểu trên tập Val để chọn Best Model
     # ------------------------------------------------------------------
     passing = [
         r for r in results if r["val_recall"] >= MIN_RECALL and r["val_precision"] >= MIN_PRECISION

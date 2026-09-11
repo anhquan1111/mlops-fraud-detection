@@ -1,26 +1,4 @@
-"""Measure how long the API takes to obtain its model at startup.
-
-This is the cold-start cost on Render: the container holds no model, so
-`src.api.load_model()` downloads the artifact from Hugging Face Hub and
-unpickles it before the service can answer its first request.
-
-Two numbers matter and they differ by orders of magnitude:
-
-    cold  — empty cache: network round trip + transfer + joblib.load
-    warm  — cache populated: hf_hub_download resolves locally, then joblib.load
-
-Reporting only the warm number would be dishonest about startup latency;
-reporting only the cold number ignores that a restarted container on the same
-host may still have the cache. Both are printed.
-
-Usage:
-    uv run python scripts/benchmark_model_load.py                  # HF Hub (default)
-    uv run python scripts/benchmark_model_load.py --repo-id user/repo
-    uv run python scripts/benchmark_model_load.py --local models/baseline_lr.pkl
-
-Network measurements depend on the connection and the Hub's response on the
-day. Treat a single run as an order of magnitude, not a specification.
-"""
+"""Đo lường thời gian tải mô hình khi API khởi động (Cold-start vs Warm-start)."""
 
 import argparse
 import logging
@@ -88,7 +66,7 @@ def _time_local_load(path: str) -> tuple[float, float]:
 
 
 def main() -> None:
-    """Run the cold/warm benchmark and print a report."""
+    """Chạy bài kiểm tra hiệu năng nạp model (cold-start và warm-start) và in báo cáo."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--repo-id",

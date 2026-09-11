@@ -21,6 +21,11 @@ dependencies = [
     "joblib>=1.4.0",
     "huggingface_hub>=0.26.0",
     "kaggle>=2.2.4",
+    "evidently>=0.7.21",
+    "boto3>=1.43.91",
+    "prometheus-client>=0.26.0",
+    "pydantic-settings>=2.15.0",
+    "pyyaml>=6.0.3",
 ]
 
 [project.optional-dependencies]

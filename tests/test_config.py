@@ -42,6 +42,12 @@ def _restore_config():
     importlib.reload(src.config)
 
 
+def test_mlflow_tracking_uri_respects_isolated_environment(monkeypatch):
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", "sqlite:///isolated_test.db")
+    config = importlib.reload(src.config)
+    assert config.MLFLOW_TRACKING_URI == "sqlite:///isolated_test.db"
+
+
 class TestDecisionThresholdOverride:
     def test_env_var_changes_the_threshold(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The whole point: setting the variable moves the operating point."""

@@ -1,0 +1,36 @@
+groups:
+  - name: fraud-api-local
+    rules:
+      - alert: FraudApiDown
+        expr: up{job="fraud-api"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus cannot scrape the fraud API"
+
+      - alert: FraudApiHigh5xxRatio
+        expr: |
+          (
+            sum(rate(fraud_http_requests_total{
+              job="fraud-api",
+              route=~"/predict|/predict/batch",
+              status_class="5xx"
+            }[2m]))
+            /
+            sum(rate(fraud_http_requests_total{
+              job="fraud-api",
+              route=~"/predict|/predict/batch"
+            }[2m]))
+          ) > 0.10
+          and
+          sum(rate(fraud_http_requests_total{
+            job="fraud-api",
+            route=~"/predict|/predict/batch"
+          }[2m])) > 0.10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prediction endpoints have more than 10% HTTP 5xx responses"
+

@@ -17,6 +17,7 @@ Usage (local dev):
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
@@ -29,6 +30,7 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
 
 from src.config import (
@@ -38,7 +40,10 @@ from src.config import (
     FEATURE_COLS,
     MLFLOW_TRACKING_URI,
     MODEL_ARTIFACT_FILENAME,
+    REPORTS_DIR,
 )
+from src.metrics import REGISTRY, HTTPMetricsMiddleware
+from src.quality import quality_gate
 
 DASHBOARD_TEMPLATE_PATH = Path(__file__).parent / "templates" / "dashboard.html"
 
@@ -110,27 +115,47 @@ def _load_from_hf_hub(repo_id: str) -> tuple[Any, dict]:
 
 
 def _load_from_mlflow() -> tuple[Any, dict]:
-    """Load model from local MLflow Registry."""
+    """Tải model từ MLflow Registry cục bộ theo flavor động (sklearn, lightgbm, xgboost)."""
     import mlflow
-    import mlflow.sklearn
 
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     model_uri = f"models:/{REGISTERED_MODEL_NAME}@{MODEL_ALIAS}"
     logger.info(f"Loading model from MLflow Registry: {model_uri}")
-    model = mlflow.sklearn.load_model(model_uri)
+    try:
+        meta = mlflow.models.Model.load(model_uri)
+        flavor = next((f for f in meta.flavors if f != "python_function"), "sklearn")
+        loader = getattr(mlflow, flavor, None)
+        if loader and hasattr(loader, "load_model"):
+            model = loader.load_model(model_uri)
+        else:
+            import mlflow.sklearn
+
+            model = mlflow.sklearn.load_model(model_uri)
+    except Exception:
+        for mod_name in ("lightgbm", "xgboost", "sklearn", "catboost"):
+            try:
+                mod = getattr(mlflow, mod_name)
+                model = mod.load_model(model_uri)
+                break
+            except Exception:
+                continue
+        else:
+            import mlflow.pyfunc
+
+            model = mlflow.pyfunc.load_model(model_uri)
     logger.info("[OK] Model loaded from MLflow Registry.")
     return model, {"source": "mlflow_registry", "model_uri": model_uri}
 
 
 def load_model() -> tuple[Any, dict]:
-    """Load model using the priority strategy described in module docstring.
-
-    Returns:
-        Tuple of (model, info_dict).
-    """
+    """Tải model theo thứ tự ưu tiên: biến môi trường, file cục bộ, HF Hub, MLflow."""
     model_path = os.environ.get("MODEL_PATH")
     if model_path:
         return _load_from_local(model_path)
+
+    for default_path in ("models/fraud_model.pkl", "models/champion.pkl", "models/baseline_lr.pkl"):
+        if Path(default_path).exists():
+            return _load_from_local(default_path)
 
     hf_repo_id = os.environ.get("HF_REPO_ID")
     if hf_repo_id:
@@ -172,7 +197,7 @@ app = FastAPI(
     description=(
         "Real-time credit card fraud detection powered by a LightGBM champion model "
         "(lgbm_regularized; held-out test PR-AUC=0.7462, Recall=0.8878, Precision=0.4555). "
-        "Input: 29 features (V1–V28 PCA-transformed + Amount scaled). "
+        "Input: 29 features (V1–V28 PCA-transformed + raw Amount). "
         "Output: fraud probability and binary prediction."
     ),
     version="1.0.0",
@@ -187,6 +212,7 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+app.add_middleware(HTTPMetricsMiddleware)
 
 
 # ---------------------------------------------------------------------------
@@ -263,7 +289,10 @@ class TransactionInput(BaseModel):
     V28: float = Field(..., description="PCA component 28")
     Amount: float = Field(..., ge=0.0, description="Transaction amount in USD (raw, >= 0)")
 
-    model_config = {"json_schema_extra": {"example": _EXAMPLE_TRANSACTION}}
+    model_config = {
+        "allow_inf_nan": False,
+        "json_schema_extra": {"example": _EXAMPLE_TRANSACTION},
+    }
 
 
 class PredictionResponse(BaseModel):
@@ -348,6 +377,14 @@ def _predict_many(
     Returns:
         One PredictionResponse per input, in the same order.
     """
+    # The raw-data contract applies BEFORE scaling: a scaled Amount may be negative.
+    raw = pd.DataFrame([tx.model_dump() for tx in transactions], columns=FEATURE_COLS)
+    issues = quality_gate(raw, raise_on_error=False)
+    if issues:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Data Quality Gate failed: {issues}",
+        )
     X = _build_feature_frame(transactions)
     probas = _model.predict_proba(X)[:, 1]
     model_name = f"{REGISTERED_MODEL_NAME}@{MODEL_ALIAS}"
@@ -435,6 +472,21 @@ async def health() -> HealthResponse:
     )
 
 
+@app.get("/ready", summary="Model readiness", tags=["Info"])
+async def ready() -> JSONResponse:
+    """Return 503 when this process cannot serve predictions."""
+    return JSONResponse(
+        {"ready": _model is not None},
+        status_code=200 if _model is not None else 503,
+    )
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics() -> Response:
+    """Expose counters/histograms for a Prometheus scrape; no per-transaction labels."""
+    return Response(generate_latest(REGISTRY), headers={"Content-Type": CONTENT_TYPE_LATEST})
+
+
 @app.post(
     "/predict",
     response_model=PredictionResponse,
@@ -457,11 +509,13 @@ async def predict(transaction: TransactionInput) -> PredictionResponse:
         )
     try:
         return _predict_one(transaction)
+    except HTTPException:
+        raise
     except Exception as exc:
-        logger.error(f"Prediction error: {exc}")
+        logger.exception("Prediction error")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Prediction failed: {str(exc)}",
+            detail="Prediction failed. Check server logs.",
         ) from exc
 
 
@@ -503,9 +557,47 @@ async def predict_batch(transactions: list[TransactionInput]) -> BatchPrediction
             count=len(predictions),
             fraud_count=fraud_count,
         )
+    except HTTPException:
+        raise
     except Exception as exc:
-        logger.error(f"Batch prediction error: {exc}")
+        logger.exception("Batch prediction error")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Batch prediction failed: {str(exc)}",
+            detail="Batch prediction failed. Check server logs.",
         ) from exc
+
+
+# ---------------------------------------------------------------------------
+# Monitoring Endpoints (Evidently Drift & Quality)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/monitoring/latest", summary="Get latest drift summary", tags=["Monitoring"])
+async def get_latest_monitoring_summary() -> Response:
+    """Return the most recent Evidently drift summary report as JSON."""
+    summary_path = REPORTS_DIR / "drift_summary.json"
+    if not summary_path.exists():
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"status": "NO_REPORT", "message": "No drift report generated yet."},
+        )
+    return JSONResponse(content=json.loads(summary_path.read_text(encoding="utf-8")))
+
+
+@app.get(
+    "/monitoring/report",
+    summary="View interactive HTML drift dashboard",
+    tags=["Monitoring"],
+)
+async def get_monitoring_html_report() -> Response:
+    """Serve the interactive HTML Evidently drift report."""
+    summary_path = REPORTS_DIR / "drift_summary.json"
+    report_path = REPORTS_DIR / "drift.html"
+    summary = json.loads(summary_path.read_text(encoding="utf-8")) if summary_path.exists() else {}
+    # Never present an older successful report as the result of a failed/new running job.
+    if summary.get("status") != "SUCCESS" or not report_path.exists():
+        return HTMLResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content="<h3>No drift report found. Please run drift analysis first.</h3>",
+        )
+    return HTMLResponse(content=report_path.read_text(encoding="utf-8"))

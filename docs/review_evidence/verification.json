@@ -1,0 +1,56 @@
+{
+  "real_csv_scaler_check": "passed",
+  "real_csv_rows": 284807,
+  "local_model_smoke": {
+    "status": "passed",
+    "class": "LGBMClassifier",
+    "artifact": "models/fraud_model.pkl",
+    "rows": 5,
+    "quality_evaluation": "not_performed"
+  },
+  "demo_stable": {
+    "exit_code": 0,
+    "status": "SUCCESS",
+    "drift_count": 0
+  },
+  "demo_shift": {
+    "exit_code": 0,
+    "status": "SUCCESS",
+    "drift_count": 15
+  },
+  "demo_broken": {
+    "exit_code": 2,
+    "status": "QUALITY_FAILURE",
+    "drift_count": null
+  },
+  "Generate synthetic smoke dataset": "passed",
+  "Run training pipeline smoke test": "passed",
+  "date": "2026-09-10",
+  "environment": "WSL Ubuntu 24.04 / Python 3.12.3, isolated copy",
+  "pytest": {
+    "passed": 142,
+    "skipped": 1,
+    "warnings": 68,
+    "seconds": 7.9
+  },
+  "before_fix_regressions": {
+    "failed": 10,
+    "existing_passed": 108,
+    "skipped": 1
+  },
+  "ruff_check": "passed",
+  "ruff_format_check": "passed",
+  "aws": "mock only; no resource operations",
+  "docker_compose": {
+    "date": "2026-09-11",
+    "api": "healthy; real local LGBM artifact returned a valid probability",
+    "prometheus": "ready; fraud-api target up; 6 predict requests scraped",
+    "promtool": "config valid; 2 rules valid",
+    "grafana": "database ok; Prometheus datasource OK; fraud-api-overview has 5 panels; no recent error-level log entries after mount fix",
+    "dashboard_promql": "all 5 panel queries returned success with one series each"
+  },
+  "not_executed": [
+    "cloud deployment",
+    "full model-quality re-evaluation"
+  ]
+}

@@ -1,20 +1,10 @@
-"""Auto-select best model from MLflow experiment and register to Model Registry.
+"""Tự động chọn mô hình tốt nhất từ MLflow Experiment và đăng ký vào Model Registry.
 
-Selection criteria (all read VALIDATION metrics — the test split never
-influences which model is chosen; see docs/leakage_fix.md):
-    1. Filter: val_recall >= MIN_RECALL AND val_precision >= MIN_PRECISION
-    2. Sort by: val_pr_auc descending
-    3. Run the validation gate (src/validate.py) on the winner — it re-checks the
-       minimum thresholds AND blocks any PR-AUC regression against the model
-       currently holding the 'production' alias.
-    4. Register winner as 'fraud-detection-model' with alias 'production'
-
-The gate is the single source of truth for "may this model go to production".
-This script never promotes a model that the gate rejected.
-
-Usage:
-    uv run python scripts/select_best_model.py
-    uv run python scripts/select_best_model.py --dry-run   # evaluate, do not promote
+Quy trình thẩm định và phê duyệt:
+1. Lọc điều kiện sàn: Recall >= 0.80 và Precision >= 0.50 trên tập Validation
+2. Xếp hạng: Sắp xếp giảm dần theo PR-AUC trên tập Validation
+3. Chạy Validation Gate (src/validate.py): Chống suy giảm hiệu năng so với Production
+4. Đăng ký mô hình vô địch vào MLflow Registry và gán alias 'production'
 """
 
 import argparse
@@ -42,15 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_all_runs(client: MlflowClient, experiment_name: str) -> list[dict]:
-    """Fetch all finished runs from the experiment.
-
-    Args:
-        client: MLflow client instance.
-        experiment_name: Name of the MLflow experiment.
-
-    Returns:
-        List of dicts with run metadata and metrics.
-    """
+    """Lấy danh sách tất cả các run đã hoàn thành từ MLflow Experiment."""
     experiment = client.get_experiment_by_name(experiment_name)
     if experiment is None:
         raise ValueError(f"Experiment '{experiment_name}' not found in MLflow.")
@@ -90,12 +72,7 @@ def get_all_runs(client: MlflowClient, experiment_name: str) -> list[dict]:
 
 
 def print_comparison_table(results: list[dict], best_run_id: str | None = None) -> None:
-    """Print a formatted comparison table of all runs.
-
-    Args:
-        results: List of run dicts from get_all_runs().
-        best_run_id: run_id of the selected best model (highlighted).
-    """
+    """In bảng so sánh chi tiết tất cả các run, đánh dấu mô hình tốt nhất."""
     print("\n" + "=" * 104)
     print("  ALL RUNS -- fraud-detection experiment (ranked by VAL PR-AUC)")
     print("  Gate decisions use VAL only. TEST columns are reported, never selected on.")
@@ -136,20 +113,7 @@ def print_comparison_table(results: list[dict], best_run_id: str | None = None) 
 
 
 def register_best_model(client: MlflowClient, best_run: dict) -> tuple[str, str]:
-    """Register the best run as a new model version in MLflow Registry.
-
-    Steps:
-        1. Register model from the run's artifact URI.
-        2. Set alias 'production' on the new version.
-        3. Remove 'production' alias from any previous version.
-
-    Args:
-        client: MLflow client instance.
-        best_run: Dict with run metadata (from get_all_runs).
-
-    Returns:
-        Tuple of (model_name, version).
-    """
+    """Đăng ký run tốt nhất vào MLflow Registry và gán alias 'production'."""
     run_id = best_run["run_id"]
     model_uri = f"runs:/{run_id}/model"
 
@@ -191,11 +155,7 @@ def register_best_model(client: MlflowClient, best_run: dict) -> tuple[str, str]
 
 
 def select_and_register(dry_run: bool = False) -> None:
-    """Query runs, select the best, run the validation gate, then register.
-
-    Args:
-        dry_run: If True, run every check but do not touch the Model Registry.
-    """
+    """Tìm kiếm mô hình tốt nhất, chạy qua Validation Gate và tiến hành phong cấp."""
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     client = MlflowClient()
 
@@ -229,7 +189,7 @@ def select_and_register(dry_run: bool = False) -> None:
     logger.info(f"{len(qualifying)} run(s) meet minimum thresholds.")
 
     # ------------------------------------------------------------------
-    # 3. Select best by PR-AUC
+    # 3. Chọn mô hình có PR-AUC cao nhất trên tập Validation
     # ------------------------------------------------------------------
     best = max(qualifying, key=lambda r: r["val_pr_auc"])
     logger.info(
@@ -238,7 +198,7 @@ def select_and_register(dry_run: bool = False) -> None:
         f"val Precision={best['val_precision']:.4f}"
     )
 
-    # Print comparison table (before registering)
+    # In bảng so sánh đối chiếu trước khi đăng ký
     print_comparison_table(all_runs, best_run_id=best["run_id"])
 
     # ------------------------------------------------------------------
@@ -270,7 +230,7 @@ def select_and_register(dry_run: bool = False) -> None:
     model_name, version = register_best_model(client, best)
 
     # ------------------------------------------------------------------
-    # 6. Print final summary
+    # 6. In bảng tổng kết nghiệm thu
     # ------------------------------------------------------------------
     print("\n" + "=" * 60)
     print("  [OK] MODEL REGISTRATION COMPLETE")

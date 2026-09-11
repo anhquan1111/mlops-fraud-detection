@@ -1,10 +1,11 @@
-"""Model evaluation utilities for the fraud detection pipeline.
+"""Đánh giá hiệu năng mô hình Fraud Detection.
 
-Primary metric: PR-AUC (precision-recall area under curve).
-Secondary metrics: Recall, Precision, F1, ROC-AUC.
-
-⚠️ Accuracy is NOT computed — meaningless on ~0.17% fraud dataset.
+Thước đo chính: PR-AUC (Precision-Recall Area Under Curve).
+Thước đo phụ: Recall, Precision, F1-score, ROC-AUC.
+LƯU Ý: Không dùng Accuracy vì dữ liệu mất cân bằng nặng (0.17% fraud).
 """
+
+from __future__ import annotations
 
 import logging
 from pathlib import Path
@@ -33,17 +34,7 @@ def evaluate_model(
     y_test: pd.Series,
     threshold: float = DECISION_THRESHOLD,
 ) -> dict[str, float]:
-    """Compute all evaluation metrics for the fraud detection model.
-
-    Args:
-        model: Trained sklearn-compatible classifier.
-        X_test: Test feature DataFrame.
-        y_test: True binary labels.
-        threshold: Decision threshold for converting probabilities to labels.
-
-    Returns:
-        Dictionary with keys: precision, recall, f1, pr_auc, roc_auc.
-    """
+    # Lấy xác suất dự đoán nhãn 1 (Fraud) và phân loại theo ngưỡng threshold
     y_proba = model.predict_proba(X_test)[:, 1]
     y_pred = (y_proba >= threshold).astype(int)
 
@@ -53,6 +44,7 @@ def evaluate_model(
     pr_auc = average_precision_score(y_test, y_proba)
     roc_auc = roc_auc_score(y_test, y_proba)
 
+    # Đếm số lượng thực tế: TP (bắt đúng), FP (báo nhầm), FN (bỏ lọt), TN (đúng người tốt)
     tn, fp, fn, tp = confusion_matrix(y_test, y_pred, labels=[0, 1]).ravel()
 
     metrics = {
@@ -62,8 +54,6 @@ def evaluate_model(
         "pr_auc": round(pr_auc, 4),
         "roc_auc": round(roc_auc, 4),
         "threshold": threshold,
-        # Absolute counts — the only form in which these metrics are actionable
-        # for an operations team ("15 false alarms", not "precision 0.85").
         "tp": int(tp),
         "fp": int(fp),
         "fn": int(fn),
@@ -74,12 +64,7 @@ def evaluate_model(
 
 
 def print_report(metrics: dict[str, float], model_name: str = "Model") -> None:
-    """Pretty-print evaluation results with pass/fail against minimum thresholds.
-
-    Args:
-        metrics: Output from evaluate_model().
-        model_name: Display name for the model.
-    """
+    # So khớp với ngưỡng tối thiểu: Recall >= 0.80 và Precision >= 0.50
     recall_ok = metrics["recall"] >= MIN_RECALL
     precision_ok = metrics["precision"] >= MIN_PRECISION
 
@@ -122,18 +107,6 @@ def save_pr_curve(
     model_name: str = "model",
     output_dir: Path = FIGURES_DIR,
 ) -> Path | None:
-    """Save Precision-Recall curve as PNG artifact.
-
-    Args:
-        model: Trained classifier.
-        X_test: Test features.
-        y_test: True labels.
-        model_name: Used for filename and title.
-        output_dir: Directory to save the PNG.
-
-    Returns:
-        Path to the saved figure, or None if matplotlib is unavailable.
-    """
     try:
         import matplotlib.pyplot as plt
     except ImportError:
@@ -147,7 +120,7 @@ def save_pr_curve(
     precision_vals, recall_vals, _ = precision_recall_curve(y_test, y_proba)
     pr_auc = average_precision_score(y_test, y_proba)
 
-    # Baseline: random classifier = fraud prevalence
+    # Đường cơ sở ngẫu nhiên = tỷ lệ ca gian lận trong tập test (~0.0017)
     baseline = float(np.mean(y_test))
 
     fig, ax = plt.subplots(figsize=(8, 6))
