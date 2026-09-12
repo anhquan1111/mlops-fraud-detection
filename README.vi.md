@@ -127,19 +127,23 @@ Ngưỡng 0.81 được tối ưu trên tập validation và kiểm chứng duy 
 
 ---
 
-## Kiến Trúc Triển Khai Đa Đám Mây (Hybrid Deployment)
+## Chiến Lược Triển Khai: Kiến Trúc Kép & Quản Trị Chi Phí (FinOps)
 
-### 1. Render PaaS (Quản lý tự động)
-- Triển khai tự động kích hoạt qua Git webhook từ nhánh `master` thông qua `render.yaml`.
-- Tự động nạp trọng số mô hình từ kho lưu trữ Hugging Face Hub (`HF_REPO_ID`).
+Để tối ưu giữa trải nghiệm dùng thử trực quan cho người đánh giá và bài toán hạ tầng chuẩn doanh nghiệp, dự án áp dụng chiến lược triển khai kép:
+
+### 1. Render PaaS (Môi trường Demo Công Khai 24/7)
+- Đóng vai trò là **môi trường demo trực tiếp** ([https://mlops-fraud-detection-g7c7.onrender.com](https://mlops-fraud-detection-g7c7.onrender.com)) giúp nhà tuyển dụng và chuyên gia kiểm thử ngay trên trình duyệt qua HTTPS mà không tốn chi phí duy trì máy chủ.
+- Tự động hóa CI/CD qua Git webhook (`render.yaml`), nạp trọng số mô hình từ Hugging Face Hub (`HF_REPO_ID`).
 - Cập nhật rolling update không gián đoạn dịch vụ với cơ chế kiểm tra `/health`.
 
-### 2. AWS Enterprise IaaS (Hạ tầng điện toán đám mây riêng)
-- **Amazon S3 (`mlops-lake-quan-2026`):** Lưu trữ tập trung các artifact mô hình độc lập.
-- **Amazon ECR (`fraud-detection-api`):** Kho chứa container bảo mật cho Docker image multi-stage non-root.
-- **Amazon EC2 (`t3.micro`):** Máy chủ đám mây chạy toàn bộ cụm 3 container (FastAPI, Prometheus, Grafana).
-- **Tối Ưu Bộ Nhớ Swap Trên Linux:** Cấu hình 2.0 GiB swapfile (`/swapfile`) trên ổ EBS gp3, nâng bộ nhớ ảo lên ~3.0 GiB, khắc phục triệt để lỗi tràn RAM (OOM) trên gói Free-Tier `t3.micro`.
-- **Phân Quyền IAM Instance Profile:** Máy chủ EC2 tự động xác thực đọc S3 và ECR mà không cần lưu trữ bất kỳ access key nào.
+### 2. AWS Enterprise IaaS (Bản Thiết Kế Hạ Tầng Doanh Nghiệp & PoC)
+- Đóng vai trò là **bản thiết kế hạ tầng sản xuất tiêu chuẩn**, đã được triển khai và kiểm chứng thực tế:
+  - **Amazon S3 (`mlops-lake-quan-2026`):** Lưu trữ tập trung các artifact mô hình độc lập.
+  - **Amazon ECR (`fraud-detection-api`):** Kho chứa container bảo mật cho Docker image multi-stage non-root.
+  - **Amazon EC2 (`t3.micro`):** Máy chủ đám mây chạy toàn bộ cụm 3 container (FastAPI, Prometheus, Grafana).
+  - **Tối Ưu Bộ Nhớ Swap Trên Linux:** Cấu hình 2.0 GiB swapfile (`/swapfile`) on ổ EBS gp3, nâng bộ nhớ ảo lên ~3.0 GiB, khắc phục triệt để lỗi tràn RAM (OOM) trên gói Free-Tier `t3.micro`.
+  - **Phân Quyền IAM Instance Profile:** Máy chủ EC2 tự động xác thực đọc S3 và ECR mà không cần lưu trữ bất kỳ access key nào.
+  - **Quản Trị Chi Phí Đám Mây (FinOps):** Tuân thủ nguyên tắc FinOps trong doanh nghiệp, hạ tầng AWS được triển khai thực nghiệm thành công, đo lường độ ổn định và đóng gói thành tài liệu triển khai chuẩn, sau đó thực hiện giải phóng tài nguyên để duy trì ngân sách $0.00.
 
 ---
 

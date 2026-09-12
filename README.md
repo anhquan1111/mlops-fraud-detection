@@ -127,19 +127,23 @@ Calibrated on the validation split and verified once on test via `uv run python 
 
 ---
 
-## Multi-Cloud Deployment Architecture
+## Deployment Strategy: Hybrid Architecture & Cloud Governance
 
-### 1. Render PaaS (Managed Cloud)
-- Continuous deployment triggered automatically from GitHub `master` via `render.yaml`.
-- Pulls serialized model weights from Hugging Face Hub (`HF_REPO_ID`).
+To balance interactive public accessibility with enterprise infrastructure design, the platform follows a dual-track deployment strategy:
+
+### 1. Render PaaS (Live Public Showcase)
+- Serves as the **always-on public demo environment** ([https://mlops-fraud-detection-g7c7.onrender.com](https://mlops-fraud-detection-g7c7.onrender.com)) for instant evaluation by recruiters and reviewers without server management costs.
+- Fully automated CI/CD triggered via GitHub webhook (`render.yaml`), pulling serialized model weights from Hugging Face Hub (`HF_REPO_ID`).
 - Zero-downtime rolling deploys with automated health check probes (`/health`).
 
-### 2. AWS Enterprise IaaS (Hardened Infrastructure)
-- **Amazon S3 (`mlops-lake-quan-2026`):** Dedicated bucket for model registry artifacts.
-- **Amazon ECR (`fraud-detection-api`):** Secure private registry hosting multi-stage, rootless Docker images.
-- **Amazon EC2 (`t3.micro`):** Production host running the 3-container stack (FastAPI, Prometheus, Grafana).
-- **Linux Swap Memory Optimization:** Configured a 2.0 GiB swapfile (`/swapfile`) on the 20 GiB EBS root volume. This expands virtual memory to ~3.0 GiB, permanently eliminating out-of-memory lockups on Free-Tier `t3.micro`.
-- **IAM Least-Privilege Role:** EC2 Instance Profile grants passwordless, credential-free read access to S3 and ECR.
+### 2. AWS Enterprise IaaS (Production Blueprint & Cloud PoC)
+- Serves as the **hardened enterprise blueprint**, verified and benchmarked in production:
+  - **Amazon S3 (`mlops-lake-quan-2026`):** Centralized cloud storage for model registry artifacts.
+  - **Amazon ECR (`fraud-detection-api`):** Secure private container registry hosting multi-stage, rootless Docker images.
+  - **Amazon EC2 (`t3.micro`):** Dedicated production host running the complete 3-container stack (FastAPI, Prometheus, Grafana).
+  - **Linux Swap Memory Optimization:** Configured a 2.0 GiB swapfile (`/swapfile`) on the 20 GiB gp3 EBS volume. This expands virtual memory to ~3.0 GiB, permanently eliminating kernel out-of-memory lockups on Free-Tier `t3.micro`.
+  - **IAM Least-Privilege Role:** EC2 Instance Profile grants passwordless, credential-free read access to S3 and ECR.
+  - **FinOps & Cost Governance:** Following enterprise FinOps practices, the AWS infrastructure was verified end-to-end and documented as a reproducible deployment blueprint rather than incurring idle cloud costs.
 
 ---
 
