@@ -12,9 +12,9 @@
 [![AWS Architecture](https://img.shields.io/badge/AWS-EC2%20%7C%20ECR%20%7C%20S3-FF9900.svg)](https://aws.amazon.com/)
 [![Render](https://img.shields.io/badge/Deploy-Render-46E3B7.svg)](https://render.com/)
 
-Nền tảng MLOps hoàn chỉnh chuẩn doanh nghiệp cho bài toán **phát hiện gian lận giao dịch thẻ tín dụng thời gian thực** trên tập dữ liệu mất cân bằng nghiêm trọng (~0,173% gian lận trên tổng số 284.807 giao dịch).
+Nền tảng MLOps hoàn chỉnh chuẩn doanh nghiệp cho bài toán **phát hiện gian lận thẻ tín dụng thời gian thực** trên tập dữ liệu mất cân bằng nghiêm trọng (~0,173% gian lận trên tổng số 284.807 giao dịch).
 
-Hệ thống được thiết kế chặt chẽ chống rò rỉ dữ liệu (data leakage), quản trị mô hình tự động champion-challenger qua MLflow, phục vụ suy luận thời gian thực với FastAPI (độ trễ dưới 2ms), giao diện dashboard vận hành chuyên nghiệp (Dark/Light theme), hệ thống giám sát toàn diện Prometheus/Grafana, kiểm toán độ trôi dữ liệu với Evidently AI và hỗ trợ triển khai thực tế đa đám mây (Render PaaS + AWS IaaS với S3, ECR và EC2 tối ưu bộ nhớ Swap).
+Hệ thống được thiết kế chặt chẽ chống rò rỉ dữ liệu (data leakage), quản trị mô hình tự động champion-challenger qua MLflow, phục vụ suy luận với FastAPI (độ trễ dưới 2ms), dashboard vận hành chuyên nghiệp (Dark/Light theme), giám sát toàn diện Prometheus/Grafana, kiểm toán độ trôi dữ liệu với Evidently AI và hỗ trợ triển khai thực tế đa đám mây (Render PaaS + AWS IaaS với S3, ECR và EC2 tối ưu bộ nhớ Swap).
 
 - **Giao diện Dashboard trực tiếp:** [https://mlops-fraud-detection-g7c7.onrender.com](https://mlops-fraud-detection-g7c7.onrender.com)
 - **Tài liệu API Swagger OpenAPI:** [https://mlops-fraud-detection-g7c7.onrender.com/docs](https://mlops-fraud-detection-g7c7.onrender.com/docs)
@@ -23,57 +23,16 @@ Hệ thống được thiết kế chặt chẽ chống rò rỉ dữ liệu (da
 
 ## Giao Diện Vận Hành Trực Quan
 
-Hệ thống tích hợp dashboard quản trị chuyên dụng cho đội ngũ vận hành phòng chống gian lận (Fraud SOC), hỗ trợ chấm điểm rủi ro thời gian thực, bóc tách đóng góp của các thuộc tính, giả lập kiểm thử tải hàng loạt và kiểm tra sức khỏe hệ thống.
+Hệ thống tích hợp dashboard quản trị chuyên dụng cho đội ngũ vận hành phòng chống gian lận (Fraud SOC):
 
-![MLOps Fraud Detection Live Demo](docs/figures/demo.gif)
+![MLOps Fraud Detection Live Demo](docs/figures/dashboard_demo.gif)
 
-### Các Tính Năng Chính Trên Dashboard
-
-- **Chấm Điểm Gian Lận & Đồng Hồ Đo Rủi Ro:** Phân tích xác suất tức thì với thang đo trực quan, tự động gán nhãn trạng thái quyết định (`APPROVED` hoặc `BLOCKED`).
-- **Phân Tích Đóng Góp Thuộc Tính (Explainability):** Bóc tách trực quan mức độ ảnh hưởng của các đặc trưng quan trọng nhất (bao gồm các thành phần PCA `V14`, `V12`, `V10`, `V4`, `V17` và giá trị `Amount`).
-- **Mẫu Giả Lập Tức Thì:** Tích hợp sẵn nút tải mẫu giao dịch chuẩn (Hợp lệ vs Gian lận nguy cơ cao) giúp kiểm thử nhanh mà không cần nhập tay 30 trường dữ liệu.
-- **Trình Giả Lập Kiểm Thử Hàng Loạt (Batch Simulator):** Mô phỏng luồng giao dịch đồng thời, thống kê tức thời số lượng duyệt/chặn, tổng giá trị giao dịch và độ trễ phản hồi trung bình.
-- **Kiểm Tra Trạng Thái Sức Khỏe Máy Chủ (Health Probe):** Trực tiếp truy vấn các đầu endpoint `/health` và `/ready`, hiển thị chi tiết nguồn model đang nạp, phiên bản và trạng thái bộ nhớ.
-- **Chế Độ Giao Diện Sáng / Tối (Dark / Light Mode):** Tùy biến giao diện hiện đại với CSS Variables, ghi nhớ tùy chọn người dùng trên trình duyệt.
-
----
-
-## Bảng Kết Quả Huấn Luyện & Tuyển Chọn Model
-
-Tất cả mô hình được huấn luyện trên tập train phân tầng (64%, 182.276 dòng) và đánh giá trên tập validation (16%, 45.569 dòng, 79 ca gian lận). Tập kiểm thử độc lập (20%, 56.962 dòng, 98 ca gian lận) chỉ được chấm điểm duy nhất một lần để báo cáo kết quả, tuyệt đối không tham gia vào early stopping, tinh chỉnh tham số hay cổng duyệt thăng cấp.
-
-| Mô hình / Cấu hình | Val PR-AUC | Val Recall | Val Prec | Test PR-AUC | Test Recall | Test Prec | TP | FP | Kết quả Cổng duyệt |
-|---|---|---|---|---|---|---|---|---|---|
-| `lgbm_large` | 0.8160 | 0.7975 | 0.8289 | 0.8703 | 0.8469 | 0.7615 | 83 | 26 | Từ chối (Recall < 0.80) |
-| `lgbm_default` | 0.8038 | 0.8228 | 0.4815 | 0.8496 | 0.8878 | 0.4652 | 87 | 100 | Từ chối (Prec < 0.50) |
-| `xgb_default` | 0.7899 | 0.7848 | 0.8267 | 0.8604 | 0.8265 | 0.7714 | 81 | 24 | Từ chối (Recall < 0.80) |
-| **`lgbm_regularized`** | **0.7407** | **0.8354** | **0.5238** | 0.7462 | 0.8878 | 0.4555 | 87 | 104 | **Đạt chuẩn (Champion)** |
-| `xgb_regularized` | 0.7135 | 0.7848 | 0.4593 | 0.7096 | 0.8571 | 0.4200 | 84 | 116 | Từ chối (Cả 2 tiêu chí) |
-| `xgb_deep` | 0.6831 | 0.7342 | 0.5000 | 0.6932 | 0.8061 | 0.4647 | 79 | 91 | Từ chối (Recall < 0.80) |
-| Logistic Regression (baseline) | 0.6755 | 0.8861 | 0.0591 | 0.7105 | 0.9082 | 0.0606 | 89 | 1379 | Từ chối (Prec < 0.50) |
-
-### Quản Trị Mô Hình & Nguyên Tắc Không Rò Rỉ Tuyển Chọn
-
-- **Mô hình Champion Production:** `lgbm_regularized` thỏa mãn toàn bộ tiêu chí thăng cấp tự động và được đăng ký trong MLflow Model Registry với alias `production`.
-- **Tiêu Chí Cổng Duyệt Tự Động (Validation Gate):**
-  - Validation Recall >= 0.80 (bắt giữ tối thiểu 80% các ca gian lận)
-  - Validation Precision >= 0.50 (tối thiểu 50% số cảnh báo đưa ra phải là gian lận thật)
-  - Validation PR-AUC >= PR-AUC của model đang chạy Production
-- **Nguyên Tắc Chống Selection Leakage:** Lưu ý rằng `lgbm_large` có chỉ số trên test set cao nhất (test PR-AUC 0.8703, test Recall 0.8469), nhưng vẫn bị loại do Validation Recall đạt 0.7975 (bắt 63/79 ca, thiếu đúng 1 ca so với mốc sàn 64/79). Việc lấy kết quả test set để can thiệp đè lên cổng duyệt là hành vi rò rỉ tuyển chọn (selection leakage); quy trình MLOps tại đây nghiêm cấm tuyệt đối điều này.
-
----
-
-## Hiệu Chuẩn Ngưỡng Quyết Định (Decision Threshold)
-
-Ngưỡng quyết định vận hành được kiểm soát qua biến môi trường `DECISION_THRESHOLD` khi khởi động tiến trình. Thay đổi ngưỡng không đòi hỏi sửa code, không cần build lại image và không cần train lại model.
-
-| Ngưỡng vận hành | Test Recall | Test Precision | True Positives | False Positives | False Negatives | Ý nghĩa nghiệp vụ |
-|---|---|---|---|---|---|---|
-| **0.50** (Mặc định) | 0.8878 | 0.4555 | 87 | 104 | 11 | Điểm vận hành tiêu chuẩn |
-| **0.81** (Đề xuất) | 0.8673 | **0.7083** | 85 | **35** | 13 | Giảm 69 ca báo động giả (-66,3%), chặn 85/98 vụ gian lận |
-
-- **Lựa Chọn Khoa Học:** Ngưỡng 0.81 được tối ưu hóa trên tập validation (tối đa hóa Precision với điều kiện Recall >= 0.80) và được kiểm chứng duy nhất một lần trên tập test thông qua script `uv run python scripts/select_threshold.py`.
-- **Hiệu Quả Nghiệp Vụ:** Chuyển ngưỡng từ 0.50 lên 0.81 giúp cắt giảm 66,3% khối lượng công việc kiểm tra thủ công của chuyên viên phân tích, chỉ đánh đổi 2 ca gian lận lọt lưới trên tổng số 56.962 giao dịch kiểm thử.
+- **Chấm Điểm Gian Lận & Đo Rủi Ro:** Phân tích xác suất tức thì với đồng hồ trực quan và tự động gán nhãn (`APPROVED` hoặc `BLOCKED`).
+- **Phân Tích Đóng Góp Thuộc Tính (Explainability):** Bóc tách mức độ ảnh hưởng của các đặc trưng quan trọng (`V14`, `V12`, `V10`, `V4`, `V17` và `Amount`).
+- **Mẫu Giả Lập Tức Thì:** Tải nhanh mẫu giao dịch chuẩn (Hợp lệ vs Gian lận nguy cơ cao) để kiểm thử mà không cần nhập tay 30 trường.
+- **Trình Giả Lập Kiểm Thử Hàng Loạt (Batch Simulator):** Mô phỏng luồng giao dịch đồng thời, thống kê tức thời tỷ lệ chặn và độ trễ phản hồi.
+- **Kiểm Tra Trạng Thái Sức Khỏe Máy Chủ (Health Probe):** Truy vấn trực tiếp `/health` và `/ready`, hiển thị chi tiết nguồn model và trạng thái vận hành.
+- **Giao Diện Sáng / Tối (Dark / Light Mode):** Tùy biến linh hoạt qua CSS Variables, tự động lưu tùy chọn của người dùng.
 
 ---
 
@@ -81,230 +40,176 @@ Ngưỡng quyết định vận hành được kiểm soát qua biến môi trư
 
 ```mermaid
 flowchart TD
-    subgraph DataLayer [Lớp Dữ Liệu và Tiền Xử Lý]
-        A[Kaggle Credit Card Dataset
-284.807 giao dịch / 0,173% Gian lận] --> B[Cổng Kiểm Tra Chất Lượng Dữ Liệu
+    subgraph Data [1. Lớp Dữ Liệu và Tiền Xử Lý]
+        A[Kaggle Dataset
+284.807 dòng / 0,173% Gian lận] --> B[Cổng Kiểm Tra Dữ Liệu
 src/quality.py]
-        B --> C[Chia Dữ Liệu Phân Tầng 3 Phần
+        B --> C[Chia Phân Tầng 3 Phần
 64% Train / 16% Val / 20% Test]
-        C --> D[Pipeline Biến Đổi Chống Rò Rỉ
-src/features.py
-Chỉ fit Scaler trên tập Train]
+        C --> D[Pipeline Chống Rò Rỉ
+RobustScaler chỉ fit trên Train]
     end
 
-    subgraph TrainingPipeline [Huấn Luyện và Quản Trị Model]
+    subgraph Training [2. Huấn Luyện và Quản Trị Model]
         D --> E[Lưới Thí Nghiệm Đa Mô Hình
-src/train.py]
-        E --> E1[Logistic Regression Baseline]
-        E --> E2[LightGBM: 3 cấu hình]
-        E --> E3[XGBoost: 3 cấu hình]
-        E1 & E2 & E3 --> F[MLflow Tracking và Lưu Trữ Artifact
-s3://mlops-lake-quan-2026 / SQLite cục bộ]
+1 LR + 3 XGB + 3 LGBM]
+        E --> F[MLflow Tracking & Artifact Store
+S3 / SQLite cục bộ]
         F --> G[Cổng Đánh Giá Tự Động
-src/validate.py
 Recall >= 0.80 / Prec >= 0.50 / PR-AUC >= prod]
         G --> H[MLflow Model Registry
 Alias: production]
     end
 
-    subgraph CICD [Tự Động Hóa CI/CD và Đóng Gói]
-        I[Mã Nguồn GitHub] --> J[GitHub Actions CI Pipeline
-143 test case vượt qua / Ruff lint]
-        J --> K[Đóng Gói Multi-Stage Docker Image
-Dockerfile]
-        K --> L1[AWS ECR Private Registry
-fraud-detection-api:latest]
-        K --> L2[Hugging Face Model Hub]
+    subgraph CICD [3. CI/CD và Đóng Gói]
+        I[Mã nguồn GitHub] --> J[GitHub Actions CI
+143 test case / Ruff lint]
+        J --> K1[Render PaaS
+Triển khai tự động qua Webhook]
+        J --> K2[AWS Production IaaS
+EC2 t3.micro + 2GB Swap / ECR / S3]
     end
 
-    subgraph Deployment [Triển Khai Đa Nền Tảng]
-        L2 --> M1[Render PaaS Web Service
-Tự động deploy qua Git Webhook / Public HTTPS]
-        L1 --> M2[AWS EC2 Production IaaS
-Ubuntu 24.04 / t3.micro + 2GB Swap]
-    end
-
-    subgraph Observability [Giám Sát Vận Hành và Đo Độ Trôi]
-        M1 & M2 --> N[FastAPI Inference Engine
-src/api.py
+    subgraph Monitoring [4. Giám Sát Vận Hành]
+        K1 & K2 --> L[FastAPI Inference Engine
 POST /predict /predict/batch]
-        N --> O[Prometheus Thu Thập Metrics
-src/metrics.py -> :8000/metrics]
-        O --> P[Dashboard Vận Hành Grafana
+        L --> M[Prometheus Thu Thập Telemetry
+:8000/metrics]
+        M --> N[Dashboard Vận Hành Grafana
 Sức khỏe dịch vụ / p95 Latency / RPS]
-        N --> Q[Pipeline Kiểm Toán Độ Trôi Evidently AI
-src/monitor.py -> KS Test / Delayed Labels]
+        L --> O[Evidently AI & Kiểm Toán Nhãn Muộn
+Kiểm định KS / Matured Cohorts]
     end
 ```
 
 ---
 
-## Các Trụ Cột Kỹ Thuật MLOps Doanh Nghiệp
+## Bảng Kết Quả Huấn Luyện & Tuyển Chọn Model
 
-### 1. Cơ Chế Triệt Tiêu Rò Rỉ Dữ Liệu (Data Leakage)
+Tất cả mô hình được huấn luyện trên tập train phân tầng (64%, 182.276 dòng) và đánh giá trên tập validation (16%, 45.569 dòng, 79 ca gian lận). Tập test độc lập (20%, 56.962 dòng, 98 ca gian lận) chỉ được chấm điểm một lần duy nhất để báo cáo.
 
-Pipeline dữ liệu thiết lập các rào chắn kỹ thuật nghiêm ngặt:
-- **Tách Tập Dữ Liệu Phân Tầng Ba Nhánh:** Quy trình cắt riêng tập test (20%) trước tiên, bảo toàn tuyệt đối tỷ lệ gian lận ~0,173% trên toàn bộ các tập. Việc thay đổi tỷ lệ validation không làm dịch chuyển ranh giới của tập test.
-- **Fit Scaler Độc Quyền Trên Tập Train:** Bộ chuẩn hóa `Amount` (RobustScaler) chỉ được fit tham số trên 64% dữ liệu train, sau đó áp dụng biến đổi cho validation và test bằng các tham số cố định đó.
-- **Tiếp Nhận Dữ Liệu Thô Đúng Thực Tế:** API nhận giá trị `Amount` thực tế chưa chuẩn hóa từ phía client, toàn bộ biến đổi được cô lập an toàn bên trong service pipeline.
+| Mô hình / Cấu hình | Val PR-AUC | Val Recall | Val Prec | Test PR-AUC | Test Recall | Test Prec | Kết quả Cổng duyệt |
+|---|---|---|---|---|---|---|---|
+| **`lgbm_regularized`** | **0.7407** | **0.8354** | **0.5238** | 0.7462 | 0.8878 | 0.4555 | **Đạt chuẩn (Champion)** |
+| `lgbm_large` | 0.8160 | 0.7975 | 0.8289 | 0.8703 | 0.8469 | 0.7615 | Từ chối (Recall < 0.80) |
+| `lgbm_default` | 0.8038 | 0.8228 | 0.4815 | 0.8496 | 0.8878 | 0.4652 | Từ chối (Prec < 0.50) |
+| `xgb_default` | 0.7899 | 0.7848 | 0.8267 | 0.8604 | 0.8265 | 0.7714 | Từ chối (Recall < 0.80) |
+| Logistic Regression (baseline) | 0.6755 | 0.8861 | 0.0591 | 0.7105 | 0.9082 | 0.0606 | Từ chối (Prec < 0.50) |
 
-### 2. Kiến Trúc Triển Khai Đa Đám Mây (Hybrid Deployment)
+<details>
+<summary><b>Xem Chi Tiết Lưới 7 Thí Nghiệm & Phân Tích Chống Rò Rỉ Tuyển Chọn</b></summary>
 
-Hệ thống hỗ trợ 2 hướng triển khai thực tế độc lập:
+| Mô hình | Val PR-AUC | Val Recall | Val Prec | Test PR-AUC | Test Recall | Test Prec | TP | FP | Lý do từ chối |
+|---|---|---|---|---|---|---|---|---|---|
+| `lgbm_large` | 0.8160 | 0.7975 | 0.8289 | 0.8703 | 0.8469 | 0.7615 | 83 | 26 | Val Recall 0.7975 (63/79 ca, thiếu đúng 1 ca so với sàn 64/79) |
+| `lgbm_default` | 0.8038 | 0.8228 | 0.4815 | 0.8496 | 0.8878 | 0.4652 | 87 | 100 | Val Precision 0.4815 (< mốc sàn 0.50) |
+| `xgb_default` | 0.7899 | 0.7848 | 0.8267 | 0.8604 | 0.8265 | 0.7714 | 81 | 24 | Val Recall 0.7848 (< mốc sàn 0.80) |
+| **`lgbm_regularized`** | **0.7407** | **0.8354** | **0.5238** | 0.7462 | 0.8878 | 0.4555 | 87 | 104 | Thăng cấp lên production |
+| `xgb_regularized` | 0.7135 | 0.7848 | 0.4593 | 0.7096 | 0.8571 | 0.4200 | 84 | 116 | Bị loại ở cả 2 tiêu chí Recall và Precision |
+| `xgb_deep` | 0.6831 | 0.7342 | 0.5000 | 0.6932 | 0.8061 | 0.4647 | 79 | 91 | Val Recall 0.7342 (< mốc sàn 0.80) |
+| Logistic Regression | 0.6755 | 0.8861 | 0.0591 | 0.7105 | 0.9082 | 0.0606 | 89 | 1379 | Chuẩn đối chiếu (báo động giả ~1.400 ca) |
 
-#### Hướng A: Render PaaS (Quản lý tự động)
-- Triển khai tự động hoàn toàn kích hoạt qua webhook mỗi khi push code lên GitHub thông qua file `render.yaml`.
-- Cơ chế nạp model trực tiếp lúc runtime từ kho lưu trữ Hugging Face Hub (`HF_REPO_ID`).
-- Hỗ trợ HTTPS công khai, giám sát health check tự động và tự phục hồi khi có sự cố.
+**Nguyên Tắc Chống Selection Leakage:** Dù `lgbm_large` đạt điểm trên test set cao nhất, mô hình vẫn bị loại do Validation Recall chỉ đạt 0.7975. Can thiệp đè lên cổng duyệt bằng kết quả test set là rò rỉ dữ liệu tuyển chọn; quy trình tự động nghiêm cấm hành vi này.
+</details>
 
-#### Hướng B: AWS Enterprise IaaS (Hạ tầng điện toán đám mây riêng)
-- **Amazon S3 (`mlops-lake-quan-2026`):** Lưu trữ tập trung các artifact mô hình máy học đã được tuần tự hóa.
-- **Amazon ECR (`fraud-detection-api`):** Kho lưu trữ Docker container bảo mật, lưu trữ image multi-stage chạy dưới quyền non-root.
-- **Amazon EC2 (`t3.micro`):** Máy chủ điện toán đám mây chạy toàn bộ cụm 3 container (FastAPI, Prometheus, Grafana).
-- **Tối Ưu Bộ Nhớ Đệm Swap Trên Linux:** Cấu hình 2.0 GiB bộ nhớ Swap (`/swapfile`) trên ổ cứng 20 GiB EBS gp3. Giải pháp này nâng tổng dung lượng bộ nhớ ảo khả dụng lên ~3.0 GiB, giải quyết triệt để lỗi tràn bộ nhớ (Out-Of-Memory) của nhân Linux khi chạy đồng thời Python, Prometheus và Grafana trên gói Free-Tier `t3.micro`.
-- **Phân Quyền Tối Thiểu Qua IAM Instance Profile (`fraud-ec2-role`):** Cấp quyền đọc từ S3 và ECR trực tiếp cho máy chủ EC2, không cần lưu trữ bất kỳ access key nào trên server.
+---
 
-### 3. Hệ Thống Giám Sát và Đo Lường Toàn Diện
+## Hiệu Chuẩn Ngưỡng Quyết Định (Decision Threshold)
 
-Mô hình giám sát sản xuất vận hành trên ba tầng độc lập:
+Ngưỡng vận hành được cấu hình thông qua biến môi trường `DECISION_THRESHOLD` khi khởi động container mà không cần sửa code hay train lại model:
 
-#### Giám Sát Vận Hành (Prometheus & Grafana)
-Prometheus liên tục lấy mẫu endpoint `/metrics` mỗi 15 giây, thu thập lưu lượng request, mã trạng thái HTTP, phân phối độ trễ p95/p99 và số lượng giao dịch gian lận bị phát hiện.
+| Ngưỡng vận hành | Test Recall | Test Precision | Số ca báo động giả | Ý nghĩa thực tế |
+|---|---|---|---|---|
+| **0.50** (Mặc định) | 0.8878 | 0.4555 | 104 | Điểm vận hành tiêu chuẩn ban đầu |
+| **0.81** (Đề xuất) | 0.8673 | **0.7083** | **35** | **Giảm 66,3% báo động giả**, bắt 85/98 ca gian lận test |
 
-![Prometheus fraud-api target is up](docs/figures/prometheus_targets.png)
+Ngưỡng 0.81 được tối ưu trên tập validation và kiểm chứng duy nhất một lần trên test qua lệnh `uv run python scripts/select_threshold.py`.
 
-Grafana tự động nạp nguồn dữ liệu Prometheus và hiển thị bảng điều khiển 5 chỉ số vận hành quan trọng: tình trạng dịch vụ, thông lượng dự đoán, tỷ lệ lỗi 5xx và số lượng request đang xử lý.
+---
 
-![Grafana Fraud Detection API overview](docs/figures/grafana_dashboard.png)
+## Kiến Trúc Triển Khai Đa Đám Mây (Hybrid Deployment)
 
-#### Kiểm Toán Độ Trôi Dữ Liệu (Evidently AI)
-Phát hiện sự dịch chuyển phân phối xác suất trên từng feature độc lập bằng kiểm định thống kê Kolmogorov-Smirnov và khoảng cách Wasserstein so với dữ liệu phân phối chuẩn lúc train.
+### 1. Render PaaS (Quản lý tự động)
+- Triển khai tự động kích hoạt qua Git webhook từ nhánh `master` thông qua `render.yaml`.
+- Tự động nạp trọng số mô hình từ kho lưu trữ Hugging Face Hub (`HF_REPO_ID`).
+- Cập nhật rolling update không gián đoạn dịch vụ với cơ chế kiểm tra `/health`.
 
-![Evidently feature drift report](docs/figures/evidently_drift_report.png)
+### 2. AWS Enterprise IaaS (Hạ tầng điện toán đám mây riêng)
+- **Amazon S3 (`mlops-lake-quan-2026`):** Lưu trữ tập trung các artifact mô hình độc lập.
+- **Amazon ECR (`fraud-detection-api`):** Kho chứa container bảo mật cho Docker image multi-stage non-root.
+- **Amazon EC2 (`t3.micro`):** Máy chủ đám mây chạy toàn bộ cụm 3 container (FastAPI, Prometheus, Grafana).
+- **Tối Ưu Bộ Nhớ Swap Trên Linux:** Cấu hình 2.0 GiB swapfile (`/swapfile`) trên ổ EBS gp3, nâng bộ nhớ ảo lên ~3.0 GiB, khắc phục triệt để lỗi tràn RAM (OOM) trên gói Free-Tier `t3.micro`.
+- **Phân Quyền IAM Instance Profile:** Máy chủ EC2 tự động xác thực đọc S3 và ECR mà không cần lưu trữ bất kỳ access key nào.
 
-#### Kiểm Toán Nhãn Đến Muộn (Delayed-Label Cohort Audit)
-Trong thực tế tài chính, nhãn gian lận chỉ xuất hiện sau nhiều ngày hoặc nhiều tuần (khi khách hàng khiếu nại tra soát). Hệ thống triển khai pipeline kiểm toán nhóm thuần tập (`src/monitor.py`), ghép nối nhật ký suy luận lịch sử với nhãn thực tế đến muộn để tính toán độ chính xác vận hành thực tế khi cửa sổ kiểm toán trưởng thành.
+---
+
+## Hệ Thống Giám Sát Toàn Diện (Observability)
+
+Giám sát sản xuất vận hành trên 3 tầng đồng bộ:
+
+| Tầng giám sát | Công nghệ | Chỉ số & Tín hiệu chính | Hình ảnh minh họa |
+|---|---|---|---|
+| **Telemetry Dịch Vụ** | Prometheus | Cào `/metrics` mỗi 15s; đo throughput, tỷ lệ lỗi 5xx, p95 latency | ![Prometheus](docs/figures/prometheus_targets.png) |
+| **Dashboard Vận Hành** | Grafana | 5 bảng điều khiển: Sức khỏe dịch vụ, Lưu lượng, Phân phối độ trễ, Request đồng thời | ![Grafana](docs/figures/grafana_dashboard.png) |
+| **Độ Trôi & Nhãn Muộn** | Evidently AI | Kiểm định Kolmogorov-Smirnov, khoảng cách Wasserstein, kiểm toán nhóm nhãn đến muộn | ![Evidently](docs/figures/evidently_drift_report.png) |
 
 ---
 
 ## Hướng Dẫn Chạy Nhanh
 
-### Yêu Cầu Cài Đặt
-
-- Python 3.12 trở lên
-- [uv](https://github.com/astral-sh/uv) (khuyến nghị để quản lý gói cực nhanh) hoặc pip
-- Docker & Docker Compose (tùy chọn, để chạy cụm container)
-
-### 1. Clone Mã Nguồn & Cài Đặt Thư Viện
+### 1. Cài Đặt Môi Trường
 
 ```bash
 git clone https://github.com/anhquan1111/mlops-fraud-detection.git
 cd mlops-fraud-detection
-
-# Cài đặt toàn bộ dependencies bằng uv
 uv sync
 ```
 
-### 2. Tải Dữ Liệu Huấn Luyện
-
-Tải tệp `creditcard.csv` từ [Kaggle Credit Card Fraud Detection](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud) và đặt vào thư mục `data/raw/creditcard.csv`:
+### 2. Huấn Luyện & Thăng Cấp Mô Hình
 
 ```bash
-# Sử dụng Kaggle CLI
-kaggle datasets download -d mlg-ulb/creditcardfraud -p data/raw/ --unzip
-```
-
-### 3. Thực Thi Pipeline Huấn Luyện
-
-```bash
-# Chạy lưới 7 thí nghiệm mô hình kèm tracking MLflow
+# Tải dataset Kaggle vào data/raw/creditcard.csv, sau đó chạy:
 uv run python -m src.train
-```
-
-### 4. Đánh Giá & Thăng Cấp Mô Hình Tốt Nhất
-
-```bash
-# Đánh giá qua cổng kiểm định và đăng ký mô hình champion
 uv run python scripts/select_best_model.py
 ```
 
-### 5. Khởi Chạy Dịch Vụ API
+### 3. Khởi Chạy Dịch Vụ Cục Bộ Hoặc Toàn Bộ Cụm Container
 
 ```bash
-# Chạy API máy chủ cục bộ với chế độ reload
+# Lựa chọn A: Chạy riêng API FastAPI + Dashboard
 uv run uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
-```
 
-Truy cập Dashboard tại `http://localhost:8000/` hoặc tài liệu Swagger tại `http://localhost:8000/docs`.
-
----
-
-## Chạy Cụm Giám Sát Bằng Docker
-
-Khởi chạy đồng thời FastAPI, Prometheus và Grafana bằng Docker Compose:
-
-```bash
-# Sao chép cấu hình môi trường
-if (-not (Test-Path .env)) { Copy-Item .env.example .env }
-
-# Build và khởi chạy ngầm 3 container
+# Lựa chọn B: Khởi chạy toàn bộ cụm Docker (FastAPI + Prometheus + Grafana)
 docker compose up -d --build
-docker compose ps
 ```
 
-| Dịch vụ | Địa chỉ truy cập | Mô tả |
-|---|---|---|
-| **FastAPI Dashboard & Docs** | `http://localhost:8000/docs` | Giao diện dashboard và tài liệu Swagger |
-| **Prometheus Targets** | `http://localhost:9090/targets` | Quản lý thu thập telemetry và trạng thái cào dữ liệu |
-| **Grafana Dashboard** | `http://localhost:3000` | Bảng điều khiển giám sát (tài khoản: `admin` / `fraud-local-only`) |
-
-Lệnh kiểm tra tình trạng:
-
-```powershell
-curl.exe http://127.0.0.1:8000/ready
-curl.exe http://127.0.0.1:8000/metrics
-docker compose logs --tail=50 api prometheus grafana
-```
+Truy cập API & Dashboard: `http://localhost:8000` | Grafana: `http://localhost:3000` (`admin` / `fraud-local-only`).
 
 ---
 
-## Chi Tiết Các Endpoint API
+## Điểm Chuẩn Độ Trễ & Đặc Tả API
 
-### `POST /predict`
-Đánh giá mức độ rủi ro gian lận của một giao dịch đơn lẻ.
+### Các Endpoint Chính
 
-**Dữ liệu gửi lên (Request):**
+- `POST /predict`: Đánh giá 1 giao dịch đơn lẻ (median **1.58 ms**, p95 **2.45 ms**).
+- `POST /predict/batch`: Chấm điểm lô lớn hiệu năng cao (100 giao dịch trong **5.99 ms** -> **0.060 ms/giao dịch**).
+- `GET /health` & `GET /ready`: Kiểm tra độ sẵn sàng và nguồn gốc trọng số mô hình đang phục vụ.
+- `GET /metrics`: Định dạng số liệu chuẩn cho Prometheus thu thập.
+- `GET /reports/latest`: Báo cáo độ trôi dữ liệu HTML mới nhất của Evidently AI.
+
+<details>
+<summary><b>Xem Ví Dụ Dữ Liệu Gửi Lên Và Phản Hồi JSON</b></summary>
+
+**Dữ liệu gửi lên (`POST /predict`):**
 ```json
 {
   "Time": 406.0,
-  "V1": -2.31,
-  "V2": 1.95,
-  "V3": -1.60,
-  "V4": 3.99,
-  "V5": -0.52,
-  "V6": -1.42,
-  "V7": -2.53,
-  "V8": 1.39,
-  "V9": -2.77,
-  "V10": -2.77,
-  "V11": 3.20,
-  "V12": -2.89,
-  "V13": -0.59,
-  "V14": -4.28,
-  "V15": 0.38,
-  "V16": -1.14,
-  "V17": -2.83,
-  "V18": -0.01,
-  "V19": 0.41,
-  "V20": 0.12,
-  "V21": 0.51,
-  "V22": -0.03,
-  "V23": -0.46,
-  "V24": 0.32,
-  "V25": 0.04,
-  "V26": 0.17,
-  "V27": 0.26,
-  "V28": -0.14,
+  "V1": -2.31, "V2": 1.95, "V3": -1.60, "V4": 3.99, "V5": -0.52,
+  "V6": -1.42, "V7": -2.53, "V8": 1.39, "V9": -2.77, "V10": -2.77,
+  "V11": 3.20, "V12": -2.89, "V13": -0.59, "V14": -4.28, "V15": 0.38,
+  "V16": -1.14, "V17": -2.83, "V18": -0.01, "V19": 0.41, "V20": 0.12,
+  "V21": 0.51, "V22": -0.03, "V23": -0.46, "V24": 0.32, "V25": 0.04,
+  "V26": 0.17, "V27": 0.26, "V28": -0.14,
   "Amount": 239.93
 }
 ```
@@ -318,148 +223,35 @@ docker compose logs --tail=50 api prometheus grafana
   "model_version": "1.0.0"
 }
 ```
-
-### `POST /predict/batch`
-Endpoint xử lý hàng loạt với hiệu năng cao, nhận danh sách mảng các đối tượng giao dịch.
-
-### `GET /health`
-Liveness probe kiểm tra khả năng sống của dịch vụ, siêu dữ liệu model, nguồn gốc và dung lượng bộ nhớ.
-
-### `GET /ready`
-Readiness probe xác nhận trọng số mô hình đã nạp vào bộ nhớ và sẵn sàng nhận request.
-
-### `GET /metrics`
-Định dạng metrics chuẩn để Prometheus thu thập dữ liệu định kỳ.
-
-### `GET /reports/latest`
-Trả về báo cáo độ trôi dữ liệu HTML mới nhất do Evidently AI tạo ra.
+</details>
 
 ---
 
-## Điểm Chuẩn Độ Trễ & Hiệu Năng Vận Hành
+## Kiểm Thử & Đảm Bảo Chất Lượng
 
-### Độ Trễ Suy Luận Trong Tiến Trình
-Đo đạc trên 300 lần lặp sau khi hoàn tất khởi động warm-up (bao gồm kiểm tra Pydantic, tiền xử lý và chấm điểm model; không tính độ trễ mạng):
-
-| Loại yêu cầu | Độ trễ Median | Độ trễ p95 | Chi phí trên mỗi giao dịch |
-|---|---|---|---|
-| Giao dịch đơn (`POST /predict`) | **1.58 ms** | 2.45 ms | 1.58 ms |
-| Lô 10 giao dịch (`POST /predict/batch`) | 2.33 ms | 3.88 ms | 0.233 ms |
-| Lô 100 giao dịch (`POST /predict/batch`) | **5.99 ms** | 7.94 ms | **0.060 ms** |
-
-*Ghi chú: Xử lý theo lô giúp tăng thông lượng xử lý lên gấp ~26 lần trên mỗi giao dịch nhờ vector hóa đồng thời toàn bộ DataFrame.*
-
-### Hiệu Năng Khởi Động Container
-Đo đạc thực tế khi nạp artifact từ kho từ xa Hugging Face Hub:
-
-| Kịch bản khởi động | Thời gian tải tệp | Thời gian nạp `joblib.load` | Tổng thời gian sẵn sàng |
-|---|---|---|---|
-| Cold Start (Container mới hoàn toàn) | ~3.5 giây | ~1.3 giây | **~4.8 giây** |
-| Warm Start (Đã lưu cache cục bộ) | ~0.1 giây | ~5 ms | **~0.15 giây** |
-
----
-
-## Kiểm Thử & Đảm Bảo Chất Lượng Phần Mềm
-
-Dự án áp dụng quy trình kiểm thử tự động nghiêm ngặt với 143 ca kiểm thử tự động vượt qua trong vòng 12 giây:
+Toàn bộ 143 test case tự động vượt qua trong vòng 12 giây, đáp ứng chuẩn kiểm tra tĩnh của Ruff:
 
 ```bash
-# Chạy toàn bộ bộ test
 uv run pytest tests/ -v
-
-# Kiểm tra phân tích tĩnh code
 uv run ruff check src/ tests/ scripts/
-
-# Kiểm tra định dạng code
-uv run ruff format --check src/ tests/ scripts/
 ```
 
-### Kiến Trúc Các Module Kiểm Thử
-
-| Module Kiểm Thử | Phạm vi bao phủ |
-|---|---|
-| `tests/test_features.py` | Tính toàn vẹn 3 tập phân tầng, đảm bảo Scaler chỉ fit trên Train, không trùng lặp index |
-| `tests/test_api.py` | Kiểm định schema Pydantic, từ chối dữ liệu rỗng/vô cực, định dạng phản hồi, health probes |
-| `tests/test_config.py` | Kiểm tra nạp biến môi trường, xác thực giới hạn ngưỡng quyết định |
-| `tests/test_evaluate.py` | Tính toán chính xác PR-AUC, ROC-AUC, Precision, Recall và F1 trên các trường hợp biên |
-| `tests/test_validate.py` | Quy tắc kiểm định mô hình champion-challenger và cổng duyệt thăng cấp |
-| `tests/test_quality.py` | Kiểm định miền giá trị giao dịch thô, tính đầy đủ và phát hiện thiếu đặc trưng |
-| `tests/test_review_regressions.py` | Bộ rào chắn bảo vệ ngăn chặn tái diễn các lỗi rò rỉ dữ liệu trong quá khứ |
-| `tests/test_monitor.py` & `test_monitor_cli.py` | Phát hiện độ trôi đặc trưng, so sánh thống kê với baseline, kiểm toán nhãn muộn |
-| `tests/test_metrics.py` | Bộ thu thập số liệu Prometheus, bộ đếm request và histogram độ trễ |
-| `tests/test_storage.py` | Lớp trừu tượng lưu trữ AWS S3 và giả lập truyền tải dữ liệu đám mây |
-
----
-
-## Cấu Trúc Thư Mục Dự Án
-
-```text
-mlops-fraud-detection/
-|-- compose.yaml                 # Cấu hình Docker Compose (FastAPI + Prometheus + Grafana)
-|-- Dockerfile                   # Multi-stage production container image
-|-- render.yaml                  # Bản thiết kế triển khai trên Render PaaS
-|-- pyproject.toml               # Thông tin dự án và quản lý thư viện uv
-|-- .github/
-|   `-- workflows/
-|       `-- ci.yml               # Pipeline GitHub Actions CI (lint + kiểm thử tự động)
-|-- src/                         # Mã nguồn nền tảng chính
-|   |-- api.py                   # Ứng dụng FastAPI, định tuyến và phục vụ dashboard
-|   |-- config.py                # Cấu hình trung tâm và biến môi trường
-|   |-- evaluate.py              # Hàm tính toán các chỉ số đánh giá (PR-AUC, F1, Recall)
-|   |-- features.py              # Đọc dữ liệu, chia 3 phần và biến đổi đặc trưng
-|   |-- metrics.py               # Thu thập chỉ số Prometheus và middleware đo độ trễ
-|   |-- monitor.py               # Kiểm toán độ trôi Evidently và đánh giá nhãn đến muộn
-|   |-- quality.py               # Kiểm tra định dạng dữ liệu thô và cổng chất lượng
-|   |-- storage.py               # Tiện ích tương tác lưu trữ đám mây AWS S3
-|   |-- train.py                 # Pipeline huấn luyện đa mô hình kèm theo dõi MLflow
-|   |-- validate.py              # Cổng kiểm định tự động và thăng cấp vào Model Registry
-|   `-- templates/
-|       `-- dashboard.html       # Giao diện dashboard vận hành doanh nghiệp
-|-- monitoring/                  # Cấu hình hệ thống giám sát
-|   |-- alerts.yml               # Quy tắc đánh giá cảnh báo của Prometheus
-|   |-- prometheus.yml           # Cấu hình cào số liệu từ container API
-|   `-- grafana/                 # Cấu hình tự động nguồn dữ liệu và dashboard Grafana
-|-- scripts/                     # Các kịch bản tự động hóa vận hành
-|   |-- benchmark_latency.py     # Đo đạc điểm chuẩn độ trễ các endpoint
-|   |-- benchmark_model_load.py  # Đo đạc thời gian nạp model cold/warm start
-|   |-- export_model.py          # Xuất mô hình MLflow thành file pickle độc lập
-|   |-- monitor_local.py         # Tạo báo cáo độ trôi Evidently cục bộ
-|   |-- select_best_model.py     # Chọn mô hình champion và thăng cấp lên production
-|   `-- select_threshold.py      # Tinh chỉnh và kiểm chứng ngưỡng quyết định tối ưu
-|-- tests/                       # 143 ca kiểm thử tự động
-|-- docs/                        # Tài liệu kiến trúc chuyên sâu
-|   |-- architecture.md          # Kiến trúc chi tiết và các quyết định thiết kế
-|   |-- leakage_fix.md           # Phân tích nguyên nhân rò rỉ dữ liệu và giải pháp
-|   |-- model_card.md            # Bảng thông tin Model Card sản xuất và đạo đức AI
-|   |-- review_day4.md           # Hướng dẫn đánh giá mã nguồn và quy trình kiểm thử
-|   `-- figures/                 # Sơ đồ kiến trúc và ảnh động demo dashboard
-`-- README.md                    # Tài liệu tiếng Anh
-```
-
----
-
-## Các Quyết Định Kỹ Thuật Quan Trọng
-
-| Quyết định chiến lược | Cơ sở kỹ thuật |
-|---|---|
-| **Chọn PR-AUC làm Metric chính** | Trên tập dữ liệu chỉ có 0,173% nhãn gian lận, ROC-AUC sẽ cho chỉ số cao giả tạo (>0.95) do lượng True Negative áp đảo. PR-AUC tập trung trực diện vào lớp thiểu số gian lận. |
-| **Sử dụng `class_weight='balanced'`** | Điều chỉnh trọng số hàm mất mát mà không sinh dữ liệu giả hay bóp méo phân phối, loại trừ nguy cơ rò rỉ dữ liệu thường gặp của SMOTE. |
-| **Chia 3 phần độc lập (64/16/20)** | Cắt riêng tập test ngay từ đầu đảm bảo dữ liệu test hoàn toàn mới lạ đối với quá trình early stopping, tìm siêu tham số và cổng duyệt. |
-| **Chỉ lựa chọn trên Validation** | Tập test chỉ được tính toán một lần duy nhất để báo cáo. Toàn bộ early stopping và chọn model champion đều diễn ra trên tập validation. |
-| **Tách biệt Telemetry và Phân tích Độ trôi** | Giám sát độ trễ dịch vụ (Prometheus) đòi hỏi độ phân giải dưới 1 giây, trong khi phân tích độ trôi dữ liệu (Evidently) cần các cửa sổ thống kê theo lô. Việc tách biệt giúp API suy luận đạt hiệu năng tối đa. |
-| **Cấu hình Bộ nhớ Swap trên AWS EC2** | Máy chủ AWS Free-Tier `t3.micro` (1 GB RAM) dễ bị treo nhân hệ điều hành do thiếu RAM khi chạy đồng thời Python, Prometheus và Grafana. 2.0 GiB bộ nhớ Swap là giải pháp an toàn và hoàn toàn miễn phí. |
+- **Pipeline Dữ Liệu (`tests/test_features.py`):** Bảo vệ tính độc lập của 3 tập phân tầng và Scaler chỉ fit trên Train.
+- **API & Cổng Quản Trị (`tests/test_api.py`, `tests/test_validate.py`):** Kiểm định schema Pydantic, logic cổng thăng cấp và health probes.
+- **Giám Sát & Metrics (`tests/test_monitor.py`, `tests/test_metrics.py`):** Kiểm tra tính toán độ trôi, nhãn trễ và bộ thu thập Prometheus.
+- **Rào Chắn Hồi Quy (`tests/test_review_regressions.py`):** Ngăn chặn triệt để nguy cơ tái diễn lỗi rò rỉ dữ liệu trong quá khứ.
 
 ---
 
 ## Tài Liệu Tham Khảo Chuyên Sâu
 
-- [Phân Tích & Khắc Phục Rò Rỉ Dữ Liệu](docs/leakage_fix.md): Báo cáo chi tiết về lỗ hổng rò rỉ dữ liệu, giải pháp khắc phục và đo lường tác động.
-- [Thẻ Mô Hình Sản Xuất (Model Card)](docs/model_card.md): Đặc tả chi tiết hiệu năng mô hình, phân tích đường cong ngưỡng và giới hạn vận hành.
+- [Phân Tích & Khắc Phục Rò Rỉ Dữ Liệu](docs/leakage_fix.md): Báo cáo chi tiết về lỗ hổng rò rỉ dữ liệu và giải pháp khắc phục.
+- [Thẻ Mô Hình Sản Xuất (Model Card)](docs/model_card.md): Đặc tả chi tiết hiệu năng mô hình, phân tích ngưỡng và giới hạn đạo đức AI.
 - [Thiết Kế Kiến Trúc Hệ Thống](docs/architecture.md): Phân tích sâu về sự đánh đổi kiến trúc, lý do chọn metric và cấu trúc liên kết.
-- [Quy Trình Kiểm Thử & Vận Hành](docs/review_day4.md): Hướng dẫn lệnh kiểm chứng từng bước, bằng chứng kiểm thử và phát hiện hồi quy.
+- [Quy Trình Kiểm Thử & Vận Hành](docs/review_day4.md): Hướng dẫn lệnh kiểm chứng từng bước và nhật ký kiểm thử.
 
 ---
 
 ## Giấy Phép Sử Dụng
 
-Dự án được phân phối dưới giấy phép MIT License - xem chi tiết tại tệp [LICENSE](LICENSE).
+Phân phối dưới giấy phép MIT License - xem chi tiết tại [MIT License](https://opensource.org/license/mit).
