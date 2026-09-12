@@ -16,8 +16,8 @@ Production-ready MLOps platform for **real-time credit card fraud detection** on
 
 Engineered with leak-free feature pipelines, automated MLflow champion-challenger model governance, sub-2ms FastAPI inference, an enterprise operations dashboard, full Prometheus/Grafana observability, Evidently AI drift auditing, and hybrid cloud deployment (Render PaaS + AWS IaaS with Linux Swap memory optimization).
 
-- **Live Operations Dashboard:** [https://mlops-fraud-detection-g7c7.onrender.com](https://mlops-fraud-detection-g7c7.onrender.com)
-- **Interactive Swagger OpenAPI:** [https://mlops-fraud-detection-g7c7.onrender.com/docs](https://mlops-fraud-detection-g7c7.onrender.com/docs)
+- **Live Operations Dashboard:** [https://fraud-detection-api-068f.onrender.com](https://fraud-detection-api-068f.onrender.com)
+- **Interactive Swagger OpenAPI:** [https://fraud-detection-api-068f.onrender.com/docs](https://fraud-detection-api-068f.onrender.com/docs)
 
 ---
 
@@ -132,7 +132,7 @@ Calibrated on the validation split and verified once on test via `uv run python 
 To balance interactive public accessibility with enterprise infrastructure design, the platform follows a dual-track deployment strategy:
 
 ### 1. Render PaaS (Live Public Showcase)
-- Serves as the **always-on public demo environment** ([https://mlops-fraud-detection-g7c7.onrender.com](https://mlops-fraud-detection-g7c7.onrender.com)) for instant evaluation by recruiters and reviewers without server management costs.
+- Serves as the **always-on public demo environment** ([https://fraud-detection-api-068f.onrender.com](https://fraud-detection-api-068f.onrender.com)) for instant evaluation by recruiters and reviewers without server management costs.
 - Fully automated CI/CD triggered via GitHub webhook (`render.yaml`), pulling serialized model weights from Hugging Face Hub (`HF_REPO_ID`).
 - Zero-downtime rolling deploys with automated health check probes (`/health`).
 

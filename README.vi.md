@@ -16,8 +16,8 @@ Nền tảng MLOps hoàn chỉnh chuẩn doanh nghiệp cho bài toán **phát h
 
 Hệ thống được thiết kế chặt chẽ chống rò rỉ dữ liệu (data leakage), quản trị mô hình tự động champion-challenger qua MLflow, phục vụ suy luận với FastAPI (độ trễ dưới 2ms), dashboard vận hành chuyên nghiệp (Dark/Light theme), giám sát toàn diện Prometheus/Grafana, kiểm toán độ trôi dữ liệu với Evidently AI và hỗ trợ triển khai thực tế đa đám mây (Render PaaS + AWS IaaS với S3, ECR và EC2 tối ưu bộ nhớ Swap).
 
-- **Giao diện Dashboard trực tiếp:** [https://mlops-fraud-detection-g7c7.onrender.com](https://mlops-fraud-detection-g7c7.onrender.com)
-- **Tài liệu API Swagger OpenAPI:** [https://mlops-fraud-detection-g7c7.onrender.com/docs](https://mlops-fraud-detection-g7c7.onrender.com/docs)
+- **Giao diện Dashboard trực tiếp:** [https://fraud-detection-api-068f.onrender.com](https://fraud-detection-api-068f.onrender.com)
+- **Tài liệu API Swagger OpenAPI:** [https://fraud-detection-api-068f.onrender.com/docs](https://fraud-detection-api-068f.onrender.com/docs)
 
 ---
 
@@ -132,7 +132,7 @@ Ngưỡng 0.81 được tối ưu trên tập validation và kiểm chứng duy 
 Để tối ưu giữa trải nghiệm dùng thử trực quan cho người đánh giá và bài toán hạ tầng chuẩn doanh nghiệp, dự án áp dụng chiến lược triển khai kép:
 
 ### 1. Render PaaS (Môi trường Demo Công Khai 24/7)
-- Đóng vai trò là **môi trường demo trực tiếp** ([https://mlops-fraud-detection-g7c7.onrender.com](https://mlops-fraud-detection-g7c7.onrender.com)) giúp nhà tuyển dụng và chuyên gia kiểm thử ngay trên trình duyệt qua HTTPS mà không tốn chi phí duy trì máy chủ.
+- Đóng vai trò là **môi trường demo trực tiếp** ([https://fraud-detection-api-068f.onrender.com](https://fraud-detection-api-068f.onrender.com)) giúp nhà tuyển dụng và chuyên gia kiểm thử ngay trên trình duyệt qua HTTPS mà không tốn chi phí duy trì máy chủ.
 - Tự động hóa CI/CD qua Git webhook (`render.yaml`), nạp trọng số mô hình từ Hugging Face Hub (`HF_REPO_ID`).
 - Cập nhật rolling update không gián đoạn dịch vụ với cơ chế kiểm tra `/health`.
 
