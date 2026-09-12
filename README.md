@@ -252,7 +252,6 @@ uv run ruff check src/ tests/ scripts/
 - [Data Leakage Analysis & Solution](docs/leakage_fix.md): Retrospective on data leakage vulnerabilities and regression fixes.
 - [Production Model Card](docs/model_card.md): Performance specifications, threshold trade-offs, and ethical limitations.
 - [System Architecture Design](docs/architecture.md): Metric selection rationale, imbalance strategies, and topology.
-- [Walkthrough & Verification Runbook](docs/review_day4.md): Step-by-step verification commands and test logs.
 
 ---
 
