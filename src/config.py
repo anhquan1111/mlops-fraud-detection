@@ -74,8 +74,7 @@ class AppSettings(BaseSettings):
 
         if not 0.0 < val < 1.0:
             raise ValueError(
-                f"DECISION_THRESHOLD={val} is out of range. "
-                "It must be strictly between 0 and 1."
+                f"DECISION_THRESHOLD={val} is out of range. It must be strictly between 0 and 1."
             )
         return val
 
