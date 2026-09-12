@@ -77,3 +77,6 @@ htmlcov/
 
 # Local monitoring reports may contain transaction distributions and sample values.
 reports/
+
+# AWS SSH Key Pairs
+*.pem
